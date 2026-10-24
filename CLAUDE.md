@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Behaviour
+
+Try to explain everything in compact and easy language. Make plans in small incremental steps that are easy to follow for a new rust/embedded developer.
+
 ## Goal
 
 One `no_std` Rust codebase for the LoRa monitoring nodes of a home heating / home-automation setup. Each node reads one or more local data sources and sends a compact, complete dataset over raw LoRa. Today's node types:
