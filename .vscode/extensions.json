@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "rust-lang.rust-analyzer",
+    "tamasfe.even-better-toml"
+  ],
+  "unwantedRecommendations": [
+    "espressif.esp-idf-extension"
+  ]
+}
