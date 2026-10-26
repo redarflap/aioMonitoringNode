@@ -8,7 +8,7 @@ const HELP: &str = "\
 Usage: cargo xtask <command>
 
 Commands:
-  check   load boards.toml and print it
+  check   load boards.toml and nodes.toml and print them
   help    show this help
 ";
 
@@ -43,6 +43,7 @@ fn main() -> ExitCode {
 /// Loads the config files and prints what it found.
 fn check() -> Result<(), String> {
     let boards = config::load_boards()?;
+    let nodes = config::load_nodes()?;
 
     println!("boards.toml: {} boards", boards.len());
     for (name, board) in &boards {
@@ -52,6 +53,19 @@ fn check() -> Result<(), String> {
             print!(" {pin}={gpio}");
         }
         println!();
+    }
+
+    println!("nodes.toml: {} nodes", nodes.nodes.len());
+    print!("  reserved_node_ids:");
+    for id in &nodes.reserved_node_ids {
+        print!(" {id:#04x}");
+    }
+    println!();
+    for (name, node) in &nodes.nodes {
+        println!(
+            "  {name}: board {}, node_id {}, {:?}, heartbeat {} s, min_interval {} s",
+            node.board, node.node_id, node.power, node.heartbeat, node.min_interval
+        );
     }
     Ok(())
 }

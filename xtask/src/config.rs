@@ -1,4 +1,4 @@
-//! The config files in the repo root, starting with `boards.toml`.
+//! The config files in the repo root: `boards.toml` and `nodes.toml`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -68,10 +68,47 @@ impl LoraPins {
     }
 }
 
+/// The whole `nodes.toml` file.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NodesFile {
+    /// First bytes that legacy nodes still send. No node may use them.
+    pub reserved_node_ids: Vec<u8>,
+    /// Node name -> node, sorted by name.
+    pub nodes: BTreeMap<String, Node>,
+}
+
+/// One `[nodes.<name>]` entry.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Node {
+    /// Name of an entry in `boards.toml`.
+    pub board: String,
+    /// First byte of every packet this node sends.
+    pub node_id: u8,
+    pub power: Power,
+    /// Seconds between packets when nothing changes.
+    pub heartbeat: u32,
+    /// Fewest seconds between two packets.
+    pub min_interval: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Power {
+    AlwaysOn,
+    DeepSleep,
+}
+
 /// Reads `boards.toml`. Returns board name -> board, sorted by name.
 pub fn load_boards() -> Result<BTreeMap<String, Board>, String> {
     let file: BoardsFile = load("boards.toml")?;
     Ok(file.boards)
+}
+
+/// Reads `nodes.toml`.
+pub fn load_nodes() -> Result<NodesFile, String> {
+    load("nodes.toml")
 }
 
 /// Reads one TOML file from the repo root and turns it into `T`.
