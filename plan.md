@@ -89,12 +89,12 @@ This phase is for learning and for getting settings that work. You throw this pr
 In a folder outside this repo:
 
 ```sh
-esp-generate --chip esp32c6 hello-c6
+esp-generate --headless -o esp32c6 -o unstable-hal -o embassy -o defmt -o esp-backtrace hello-c6
 ```
 
-A menu opens. Turn on **Embassy** and **defmt**, and leave the rest as it is.
+`--headless` skips the menu. Each `-o` turns on one option: the chip, Embassy (which needs `unstable-hal`), defmt logging, and esp-backtrace for panics. `esp-generate list-options` shows all options.
 
-If you only have an S3 board, use `--chip esp32s3`, and read "S3" wherever this plan says "C6" until Phase 5.
+If you only have an S3 board, use `-o esp32s3`, and read "S3" wherever this plan says "C6" until Phase 5.
 
 **Check:** the folder `hello-c6` has a `Cargo.toml`, a `build.rs`, a `.cargo/config.toml` and a `src/` folder.
 
@@ -110,7 +110,7 @@ cargo run --release
 Keep these files open. Later steps copy from them:
 
 - `Cargo.toml`: the versions of the `esp-*`, `embassy-*` and `defmt` crates, and the `[profile.*]` sections.
-- `.cargo/config.toml`: the `rustflags` and the `[env]` section.
+- `.cargo/config.toml`: the `rustflags`. It `include`s `.cargo/esp-config.toml`, which holds the `[env]` section.
 - `build.rs`: the linker settings.
 - `src/`: how esp-hal and esp-rtos get started.
 
@@ -290,13 +290,30 @@ Commit: `Validate boards and nodes`
 
 ### 4.1 Move hello world into `firmware/node`
 
-1. Copy `Cargo.toml`, `build.rs`, `src/` and `.cargo/config.toml` from `hello-c6` into `firmware/node`. Don't copy `target/`, `Cargo.lock`, `rust-toolchain.toml`, `.gitignore` or `.vscode/`.
+1. Copy `Cargo.toml`, `build.rs`, `.clippy.toml`, `src/` and `.cargo/` (both `config.toml` and `esp-config.toml`) from `hello-c6` into `firmware/node`. Don't copy `target/`, `Cargo.lock`, `rust-toolchain.toml`, `.gitignore` or `.vscode/`.
 2. In `firmware/node/Cargo.toml`:
    - Rename the package to `node`, and the `[[bin]]` too if there is one. Set `edition.workspace = true`.
    - Delete the `[profile.*]` sections. Profiles only work in the root `Cargo.toml`.
    - Move each dependency's version into `[workspace.dependencies]` in the root, and write `esp-hal = { workspace = true, features = [...] }` here. Pin the `esp-*` versions exactly, like `"=1.2.3"`. Their unstable APIs can break on minor updates.
 3. Add `firmware/node` to `members` only, **not** to `default-members`. That way `cargo test` never tries to build firmware for your PC.
-4. In `firmware/node/.cargo/config.toml`, keep `rustflags` and `[env]`. Delete the `[build] target` and `runner` lines; the xtask takes over those jobs. Cargo reads this file only when it runs inside `firmware/node`.
+4. Edit `firmware/node/.cargo/config.toml`:
+   - Keep the `include` of `esp-config.toml`.
+   - Delete the `runner` line and put the `rustflags` from `[build]` in its place, under `[target.riscv32imac-unknown-none-elf]`. Each chip then has its own flags; the S3 ones follow in step 5.1. (Once a `[target.…]` table has `rustflags`, cargo ignores the ones in `[build]` for that target.)
+   - Delete what is left of `[build]` (`target = …`) and the `[unstable]` table. The xtask picks the target, stable Rust ignores `[unstable]` anyway, and the S3 build gets `build-std` from the xtask in step 5.1.
+
+   The file then looks like this:
+
+   ```toml
+   include = ["esp-config.toml"]
+
+   [target.riscv32imac-unknown-none-elf]
+   rustflags = [
+     # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
+     "-C", "force-frame-pointers",
+   ]
+   ```
+
+   Cargo reads this file only when it runs inside `firmware/node`.
 5. Build and flash by hand, from inside `firmware/node`:
 
    ```sh
@@ -415,11 +432,11 @@ Commit: `Pass board pins to the firmware`
 
 ### 5.1 Build for the S3
 
-1. Make a second throwaway project with `esp-generate --chip esp32s3 hello-s3`. Copy its `rustflags` into `firmware/node/.cargo/config.toml`, under `[target.xtensa-esp32s3-none-elf]`.
+1. Make a second throwaway project with `esp-generate --headless -o esp32s3 -o unstable-hal -o embassy -o defmt -o esp-backtrace hello-s3`. Copy its `rustflags` into `firmware/node/.cargo/config.toml`, under `[target.xtensa-esp32s3-none-elf]`.
 2. In the xtask, for an S3 node:
    - use the target `xtensa-esp32s3-none-elf`,
    - run `cargo +esp …` instead of `cargo …`,
-   - add `-Zbuild-std=core,alloc` (the Rust core library has to be compiled for Xtensa).
+   - add `-Zbuild-std=core` (the Rust core library has to be compiled for Xtensa). Use the same list as the `[unstable] build-std` line in `hello-s3/.cargo/config.toml`.
 
    Start `cargo` by name. Don't use the `CARGO` environment variable that `cargo xtask` sets: it points straight to the stable cargo, which doesn't understand `+esp`.
 
