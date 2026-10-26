@@ -1,0 +1,91 @@
+//! The config files in the repo root, starting with `boards.toml`.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+/// The whole `boards.toml` file.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoardsFile {
+    boards: BTreeMap<String, Board>,
+}
+
+/// One `[boards.<name>]` entry.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Board {
+    pub chip: Chip,
+    pub radio: Radio,
+    pub lora: LoraPins,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Chip {
+    Esp32c6,
+    Esp32s3,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Radio {
+    Sx126x,
+    Sx127x,
+}
+
+/// GPIO numbers of the LoRa radio.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LoraPins {
+    pub sck: u8,
+    pub mosi: u8,
+    pub miso: u8,
+    pub cs: u8,
+    pub rst: u8,
+    /// DIO1 on SX126x, DIO0 on SX127x.
+    pub irq: u8,
+    /// Only SX126x radios have a BUSY pin.
+    pub busy: Option<u8>,
+}
+
+impl LoraPins {
+    /// Every pin the board has, as (name, GPIO number).
+    pub fn pins(&self) -> Vec<(&'static str, u8)> {
+        let mut pins = vec![
+            ("sck", self.sck),
+            ("mosi", self.mosi),
+            ("miso", self.miso),
+            ("cs", self.cs),
+            ("rst", self.rst),
+            ("irq", self.irq),
+        ];
+        if let Some(busy) = self.busy {
+            pins.push(("busy", busy));
+        }
+        pins
+    }
+}
+
+/// Reads `boards.toml`. Returns board name -> board, sorted by name.
+pub fn load_boards() -> Result<BTreeMap<String, Board>, String> {
+    let file: BoardsFile = load("boards.toml")?;
+    Ok(file.boards)
+}
+
+/// Reads one TOML file from the repo root and turns it into `T`.
+fn load<T: for<'de> Deserialize<'de>>(name: &str) -> Result<T, String> {
+    let path = repo_root().join(name);
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("can't read {}: {e}", path.display()))?;
+    toml::from_str(&text).map_err(|e| format!("in {name}:\n{e}"))
+}
+
+/// The repo root is the folder that holds `xtask/`.
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask/ is inside the repo")
+        .to_path_buf()
+}
