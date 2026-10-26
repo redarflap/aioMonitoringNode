@@ -125,8 +125,10 @@ No commit: this project isn't part of the repo.
 1. Create the first library:
 
    ```sh
-   cargo new --lib crates/proto
+   cargo new --lib --vcs none crates/proto
    ```
+
+   `--vcs none` stops cargo from creating a second git repo (`.git`, `.gitignore`) inside this one.
 
 2. Create `Cargo.toml` in the repo root:
 
@@ -203,7 +205,7 @@ Commit: `Add empty library crates`
 ### 3.1 xtask skeleton
 
 ```sh
-cargo new xtask
+cargo new --vcs none xtask
 ```
 
 Add `xtask` to `default-members` (`cargo new` already put it in `members`), and set `edition.workspace = true`. The xtask runs on your PC, so it can use `std` and normal crates.

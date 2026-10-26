@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/proto"]
+default-members = ["crates/proto"]   # what a plain `cargo test` covers
+
+[workspace.package]
+edition = "2024"
+
+[workspace.dependencies]
+# Shared crate versions go here, so every crate uses the same ones.
+
+# Profiles from the esp-generate template.
+# For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
+[profile.dev]
+# The default debug profile is too slow and too big for resource-constrained devices.
+# Always build with some optimizations enabled.
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1     # LLVM can perform better optimizations using a single thread
+debug         = 2     # prefer slower builds but better debugging experience
+lto           = 'fat'
+opt-level     = 's'   # keep "s": the firmware is always built with --release
