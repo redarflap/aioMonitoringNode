@@ -3,5 +3,25 @@
 version = 4
 
 [[package]]
+name = "eder"
+version = "0.1.0"
+
+[[package]]
+name = "lp-shared"
+version = "0.1.0"
+
+[[package]]
+name = "onewire"
+version = "0.1.0"
+
+[[package]]
+name = "policy"
+version = "0.1.0"
+
+[[package]]
 name = "proto"
+version = "0.1.0"
+
+[[package]]
+name = "pyromat"
 version = "0.1.0"

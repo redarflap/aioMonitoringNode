@@ -1,7 +1,21 @@
 [workspace]
 resolver = "3"
-members = ["crates/proto"]
-default-members = ["crates/proto"]   # what a plain `cargo test` covers
+members = [
+    "crates/eder",
+    "crates/lp-shared",
+    "crates/onewire",
+    "crates/policy",
+    "crates/proto",
+    "crates/pyromat",
+]
+default-members = [   # what a plain `cargo test` covers
+    "crates/eder",
+    "crates/lp-shared",
+    "crates/onewire",
+    "crates/policy",
+    "crates/proto",
+    "crates/pyromat",
+]
 
 [workspace.package]
 edition = "2024"
