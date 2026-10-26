@@ -214,6 +214,8 @@ In `xtask/src/main.rs`, read the command with `std::env::args()` and `match` on 
 
 **Check:** `cargo xtask help` prints the help. `cargo xtask foo` prints it too and fails.
 
+From now on, a plain `cargo build --target riscv32imac-unknown-none-elf` fails, because it also builds the xtask, which needs `std`. Name the libraries instead: `-p proto -p policy -p onewire -p lp-shared -p eder -p pyromat`.
+
 Commit: `Add xtask skeleton`
 
 ### 3.2 `boards.toml`
