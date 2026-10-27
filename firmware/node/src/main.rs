@@ -43,7 +43,7 @@ async fn main(spawner: Spawner) {
 
     // Each task can run only once, so spawning fails only if this runs twice.
     spawner.spawn(report::task(board.radio).unwrap());
-    sources::spawn_all(spawner);
+    sources::spawn_all(spawner, board.sources);
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.2.2/examples
 }

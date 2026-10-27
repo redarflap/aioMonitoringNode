@@ -10,7 +10,10 @@ use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 
-use crate::{config, radio};
+use crate::{config, radio, sources};
+
+#[cfg(feature = "source-battery")]
+mod battery;
 
 /// Both radio families handle 8 MHz.
 const LORA_SPI_CLOCK: Rate = Rate::from_mhz(8);
@@ -18,6 +21,7 @@ const LORA_SPI_CLOCK: Rate = Rate::from_mhz(8);
 /// What the rest of the firmware gets from the board.
 pub struct Board {
     pub radio: radio::Hardware,
+    pub sources: sources::Hardware,
 }
 
 /// Takes all of the chip's peripherals, so call it once, at start-up.
@@ -66,8 +70,15 @@ pub fn init(peripherals: Peripherals) -> Board {
         dio0: config::LORA_IRQ.map(input),
     };
 
+    #[cfg(feature = "source-battery")]
+    info!("battery pin: adc {}", config::BATTERY_ADC);
+
     Board {
         radio: radio::Hardware { spi, pins },
+        sources: sources::Hardware {
+            #[cfg(feature = "source-battery")]
+            battery: battery::init(peripherals.ADC1),
+        },
     }
 }
 

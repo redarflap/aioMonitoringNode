@@ -52,9 +52,9 @@ New rules in `validate.rs`, each with a test:
 
 ### 1.5 Battery ADC driver (`board/`)
 
-- esp-hal's ADC takes a typed pin (`peripherals.GPIO2`), not an `AnyPin`. So `board/` matches `BATTERY_ADC` against the chip's ADC1 GPIOs with a small macro, and each arm builds the reader for its pin. ADC1 with `AdcCalCurve` calibration and 11 dB attenuation, which returns millivolts.
-- Embassy tasks can't be generic, so the reader hides the pin type behind a small trait with `fn read_mv(&mut self) -> u16`, stored in a `StaticCell`.
-- `Board` gets the reader behind `source-battery`. `main.rs` passes it to the battery task, which logs the pin voltage every `heartbeat` for now.
+- esp-hal's ADC takes a typed pin (`GPIO2`), not an `AnyPin`. So `board/battery.rs` matches `BATTERY_ADC` against the chip's ADC1 GPIOs with a small macro, and each arm steals its typed pin and builds the reader. ADC1 with `AdcCalCurve` calibration and 11 dB attenuation, which returns millivolts.
+- Embassy tasks can't be generic, so the reader hides the pin type behind the trait `sources::battery::BatteryAdc` with `fn read_mv(&mut self) -> u16`, stored in a `StaticCell`.
+- `Board` gets `sources: sources::Hardware` (like `radio::Hardware`), which holds the reader behind `source-battery`. `main.rs` passes it to `spawn_all`, and the battery task logs the pin voltage every `heartbeat` for now.
 
 **Check:** `cargo xtask build --all`, `cargo xtask clippy dev-c6`. On dev-c6, the logged pin voltage matches a multimeter at the pin. **Commit:** "Read the battery ADC"
 
