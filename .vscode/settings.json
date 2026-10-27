@@ -1,0 +1,32 @@
+{
+  // rust-analyzer checks the firmware the way `cargo xtask build dev-c6` builds it.
+  // It uses one target for the whole workspace, so the xtask (which needs `std`)
+  // shows false errors. While you work on the xtask for longer, comment out
+  // `cargo.target`.
+  "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf",
+  "rust-analyzer.cargo.features": [
+    "node/esp32c6",
+    "node/sx127x",
+    "node/source-battery",
+    "node/source-ds18b20",
+    "node/source-eder",
+    "node/source-pyromat"
+  ],
+  // The `AIO_*` values that `cargo xtask` passes for dev-c6 on board c6-dev.
+  // Add every `AIO_*` variable the firmware reads with `env!`.
+  "rust-analyzer.cargo.extraEnv": {
+    "AIO_NODE_ID": "100",
+    "AIO_HEARTBEAT": "60",
+    "AIO_MIN_INTERVAL": "10",
+    "AIO_PIN_LORA_SCK": "20",
+    "AIO_PIN_LORA_MOSI": "19",
+    "AIO_PIN_LORA_MISO": "18",
+    "AIO_PIN_LORA_CS": "21",
+    "AIO_PIN_LORA_RST": "22"
+  },
+  // Tests need `std`, so don't build them for the chip.
+  "rust-analyzer.cargo.allTargets": false,
+  // On save, check only the saved file's crate, so the xtask's false errors
+  // don't show up while you work on the firmware.
+  "rust-analyzer.check.workspace": false
+}

@@ -568,6 +568,8 @@ rust-analyzer uses one target for the whole workspace. With the C6 target, the x
 
 Commit: `Configure rust-analyzer for the firmware`
 
+**Status (2026-10-27):** the settings copy dev-c6 exactly: `sx127x` instead of `sx126x`, the c6-dev pins, and no `irq`, so the editor checks the SPI polling that replaces DIO0. The SX126x code shows as inactive. `cargo.allTargets: false` replaces `check.allTargets`, because it also stops rust-analyzer from building tests for the chip when it starts. `check.workspace: false` checks only the saved file's crate, so saving a firmware file doesn't show the xtask's false errors. Run from the repo root with the same features and env vars, `cargo check -p node` passes without warnings. In VS Code, hovering over an esp-hal type shows its docs, and there are no red errors.
+
 ### 8.2 CI on GitHub
 
 1. xtask: add `cargo xtask build --all`, which builds every node in `nodes.toml`. It's handy locally, too.

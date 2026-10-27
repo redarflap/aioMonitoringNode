@@ -160,7 +160,7 @@ The root `.cargo/config.toml` sets no build target and defines `xtask = "run -p 
 
 Never run `cargo build --workspace` or `cargo clippy --workspace`, because the firmware members don't compile for the host. To try a source on a dev board, add the board to `boards.toml` and a node using it to `nodes.toml`.
 
-rust-analyzer can't check the firmware crates until `.vscode/settings.json` gives it the RISC-V target, the chip, radio and source features, and the pin env vars that the xtask exports. Add these settings together with the firmware scaffold.
+`.vscode/settings.json` makes rust-analyzer check the firmware like `cargo xtask build dev-c6`: the RISC-V target, dev-c6's chip, radio and source features (plus the other sources), and the `AIO_*` values that the xtask exports for it. When the firmware reads a new `AIO_*` variable or gets a new feature, add it there too. rust-analyzer uses one target for the whole workspace, so the xtask shows false errors in the editor. Comment out `cargo.target` while you work on the xtask.
 
 ```sh
 # host-side libraries
