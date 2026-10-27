@@ -581,6 +581,8 @@ Commit: `Configure rust-analyzer for the firmware`
 
 Commit: `Add CI`
 
+**Status (2026-10-27):** `build --all` stops at the first node that fails. Nodes on the same chip share one ELF path, so it only proves that every node builds. The host job runs `cargo fmt --all --check`, and both jobs cache with `Swatinem/rust-cache`. On PR #1, CI was green (host 34 s, firmware 2 min 34 s, both nodes built). A commit with broken formatting turned the host job red at `cargo fmt`.
+
 ### 8.3 Update the docs and clean up
 
 - `ARCHITECTURE.md`: remove "Nothing is built yet". Add the new commands (`check`, `build --all`) and the `AIO_*` variable names, and fix anything that ended up different.
