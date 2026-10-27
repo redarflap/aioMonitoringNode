@@ -6,6 +6,10 @@
 
 use heapless::{CapacityError, Vec};
 
+mod battery;
+
+pub use battery::Battery;
+
 /// The most bytes a LoRa packet can carry.
 pub const MAX_PACKET_LEN: usize = 255;
 
