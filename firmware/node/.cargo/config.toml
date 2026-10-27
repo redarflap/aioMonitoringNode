@@ -1,0 +1,10 @@
+# Keep compilation settings in this file and user/runtime settings in `esp-config.toml`.
+# Cargo reads this file only when it runs inside firmware/node.
+include = ["esp-config.toml"]
+
+[target.riscv32imac-unknown-none-elf]
+rustflags = [
+  # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
+  # NOTE: May negatively impact performance of produced code
+  "-C", "force-frame-pointers",
+]

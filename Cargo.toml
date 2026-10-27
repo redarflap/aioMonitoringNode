@@ -7,6 +7,7 @@ members = [
     "crates/policy",
     "crates/proto",
     "crates/pyromat",
+    "firmware/node",   # not in default-members: it only builds for the chip
     "xtask",
 ]
 default-members = [   # what a plain `cargo test` covers
@@ -24,6 +25,19 @@ edition = "2024"
 
 [workspace.dependencies]
 # Shared crate versions go here, so every crate uses the same ones.
+
+# esp-* crates are pinned exactly: their unstable APIs can break on minor updates.
+esp-backtrace = "=0.20.0"
+esp-bootloader-esp-idf = "=0.6.0"
+esp-hal = "=1.2.2"
+esp-println = "=0.18.0"
+esp-rtos = "=0.4.0"
+
+critical-section = "1.2.0"
+defmt = "1.0.1"
+embassy-executor = "0.10.0"
+embassy-time = "0.5.0"
+static_cell = "2.1.1"
 
 # Profiles from the esp-generate template.
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
