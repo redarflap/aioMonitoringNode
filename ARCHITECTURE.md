@@ -134,14 +134,14 @@ Raw LoRa, one-way, no ACKs or retries.
 - Otherwise send every `heartbeat`.
 - Thresholds are in wire units; 0 means "any change" (the default for flags and enums). Each numeric field has a default threshold in `crates/proto`, which `nodes.toml` can override.
 
-### Kinds (proposed; confirm the field types before fixing them)
+### Kinds (1–3 proposed; confirm their field types before fixing them)
 
 | kind | source | body |
 |---|---|---|
 | 1 | ds18b20 | repeated `{sensor_id: u16, temp: i16 (raw 1/16 °C)}`, always last. `sensor_id` = bits 48..63 of the ROM code, like the legacy packets. Sensors without a valid reading are left out |
 | 2 | eder | 36 bytes: flags (masked to the known bits, so never 0xFF), refillMode, degassingStatus, level %, refillMin/MaxThreshold % as `u8`; pressure, targetPressureMin/Max (bar×100), rpmPump1 (%×100), temperature (°C×10), pressureBottom1/Top1 (mbar), tempMulticontrolPcb (°C×100), refillRest (l) as `i16`; pump1Seconds, refillTotal (l), degassingSeconds as `u32` |
 | 3 | pyromat | tempSystem, tempReturn, tempBufferTop/Middle/Bottom, tempExhaust, targetSystemTemp as `i16` (0.1 °C); restO2, targetRestO2 as `i16`; ventilatorRpm, airInletPrimary/Secondary, valveReturnMixing, valveBuffer as `u16` (the last four may narrow to `u8`). No boiler clock: the receiver timestamps packets |
-| 4 | battery | `u8` = (mV − 2000) / 10, 0xFF = not measured |
+| 4 | battery | `u8` = battery mV / 20, rounded (0–5.08 V, higher clamps to 0xFE), 0xFF = not measured |
 
 ### Decoding & Home Assistant
 
