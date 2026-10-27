@@ -44,6 +44,13 @@ pub const LORA_BUSY: Option<u8> = match option_env!("AIO_PIN_LORA_BUSY") {
     None => None,
 };
 
+/// The GPIO that reads the battery through its voltage divider.
+#[cfg(feature = "source-battery")]
+pub const BATTERY_ADC: u8 = parse_u8(env!("AIO_PIN_BATTERY_ADC"));
+/// Battery voltage / pin voltage, × 1000.
+#[cfg(feature = "source-battery")]
+pub const BATTERY_DIVIDER_PERMILLE: u32 = parse_u32(env!("AIO_BATTERY_DIVIDER_PERMILLE"));
+
 /// SX126x only: the voltage in mV that the radio feeds its TCXO.
 /// `None` when the board has no TCXO.
 #[cfg(feature = "sx126x")]

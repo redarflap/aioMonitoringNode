@@ -110,8 +110,9 @@ fn node_env(node: &Node) -> BTreeMap<String, String> {
 
 /// The board's pins and settings from `boards.toml`, as env vars for
 /// `firmware/node/src/config.rs`. `lora.sck = 6` becomes `AIO_PIN_LORA_SCK=6`,
-/// `tcxo_mv = 1800` becomes `AIO_TCXO_MV=1800`. What the board doesn't have
-/// (like `busy` on an SX127x board) isn't exported.
+/// `tcxo_mv = 1800` becomes `AIO_TCXO_MV=1800`, `battery.divider = 2.0` becomes
+/// `AIO_BATTERY_DIVIDER_PERMILLE=2000`, so the firmware only does integer math.
+/// What the board doesn't have (like `busy` on an SX127x board) isn't exported.
 fn board_env(board: &Board) -> BTreeMap<String, String> {
     let mut env: BTreeMap<String, String> = board
         .pins()
@@ -123,6 +124,13 @@ fn board_env(board: &Board) -> BTreeMap<String, String> {
         .collect();
     if let Some(mv) = board.tcxo_mv {
         env.insert("AIO_TCXO_MV".to_string(), mv.to_string());
+    }
+    if let Some(battery) = &board.battery {
+        let permille = (battery.divider * 1000.0).round() as u32;
+        env.insert(
+            "AIO_BATTERY_DIVIDER_PERMILLE".to_string(),
+            permille.to_string(),
+        );
     }
     env
 }
@@ -254,16 +262,19 @@ mod tests {
             chip = "esp32c6"
             radio = "sx127x"
             lora = { sck = 6, mosi = 7, miso = 2, cs = 18, rst = 19, irq = 20 }
+            battery = { adc = 3, divider = 4.014 }
             "#,
         )
         .unwrap();
         let env = board_env(&board);
         assert_eq!(env["AIO_PIN_LORA_SCK"], "6");
         assert_eq!(env["AIO_PIN_LORA_IRQ"], "20");
+        assert_eq!(env["AIO_PIN_BATTERY_ADC"], "3");
+        assert_eq!(env["AIO_BATTERY_DIVIDER_PERMILLE"], "4014");
         // An SX127x board has no `busy` pin and no TCXO, so they aren't exported.
         assert!(!env.contains_key("AIO_PIN_LORA_BUSY"));
         assert!(!env.contains_key("AIO_TCXO_MV"));
-        assert_eq!(env.len(), 6);
+        assert_eq!(env.len(), 8);
     }
 
     #[test]

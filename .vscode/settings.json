@@ -22,7 +22,9 @@
     "AIO_PIN_LORA_MOSI": "19",
     "AIO_PIN_LORA_MISO": "18",
     "AIO_PIN_LORA_CS": "21",
-    "AIO_PIN_LORA_RST": "22"
+    "AIO_PIN_LORA_RST": "22",
+    "AIO_PIN_BATTERY_ADC": "2",
+    "AIO_BATTERY_DIVIDER_PERMILLE": "2000"
   },
   // Tests need `std`, so don't build them for the chip.
   "rust-analyzer.cargo.allTargets": false,

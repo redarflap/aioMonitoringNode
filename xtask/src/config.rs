@@ -22,6 +22,8 @@ pub struct Board {
     /// Boards without a TCXO leave it out.
     pub tcxo_mv: Option<u16>,
     pub lora: LoraPins,
+    /// Boards that can't measure their battery leave it out.
+    pub battery: Option<BatteryPins>,
 }
 
 impl Board {
@@ -31,6 +33,9 @@ impl Board {
         let mut pins = Vec::new();
         for (name, gpio) in self.lora.pins() {
             pins.push((format!("lora.{name}"), gpio));
+        }
+        if let Some(battery) = &self.battery {
+            pins.push(("battery.adc".to_string(), battery.adc));
         }
         pins
     }
@@ -84,6 +89,16 @@ impl LoraPins {
         }
         pins
     }
+}
+
+/// The battery's voltage divider and the pin that reads it.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BatteryPins {
+    /// The GPIO that reads the divided battery voltage.
+    pub adc: u8,
+    /// Battery voltage / pin voltage, for example 2.0 for two equal resistors.
+    pub divider: f64,
 }
 
 /// The whole `nodes.toml` file.

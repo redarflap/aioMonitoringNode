@@ -95,6 +95,12 @@ fn check() -> Result<(), String> {
             print!(" {pin}={gpio}");
         }
         println!();
+        if let Some(battery) = &board.battery {
+            println!(
+                "    battery: adc={}, divider {}",
+                battery.adc, battery.divider
+            );
+        }
     }
 
     println!("nodes.toml: {} nodes", nodes.nodes.len());
