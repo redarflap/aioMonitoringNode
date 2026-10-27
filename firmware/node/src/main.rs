@@ -43,6 +43,16 @@ async fn main(spawner: Spawner) -> ! {
         config::HEARTBEAT_S,
         config::MIN_INTERVAL_S
     );
+    info!(
+        "lora pins: sck {}, mosi {}, miso {}, cs {}, rst {}, irq {}, busy {}",
+        config::LORA_SCK,
+        config::LORA_MOSI,
+        config::LORA_MISO,
+        config::LORA_CS,
+        config::LORA_RST,
+        config::LORA_IRQ,
+        config::LORA_BUSY
+    );
 
     // TODO: Spawn some tasks
     let _ = spawner;

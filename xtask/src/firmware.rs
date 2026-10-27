@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::config::{self, Chip, Node};
+use crate::config::{self, Board, Chip, Node};
 use crate::validate;
 
 /// What cargo needs to know to build the firmware of one node.
@@ -13,8 +13,9 @@ struct Firmware {
     target: &'static str,
     /// The cargo feature that picks the chip in `firmware/node`.
     chip_feature: &'static str,
-    /// `AIO_*` env vars with the node's values. The firmware reads them with `env!`.
-    env: BTreeMap<&'static str, String>,
+    /// `AIO_*` env vars with the node's values and its board's pins. The firmware
+    /// reads them with `env!`.
+    env: BTreeMap<String, String>,
 }
 
 /// Builds the node's firmware and returns the path of its ELF file.
@@ -70,20 +71,39 @@ fn resolve(node_name: &str) -> Result<Firmware, String> {
     // `validate::run` has already checked that the board exists.
     let board = &boards[&node.board];
 
+    let mut env = node_env(node);
+    env.extend(pin_env(board));
     Ok(Firmware {
         target: board.chip.target()?,
         chip_feature: board.chip.feature(),
-        env: node_env(node),
+        env,
     })
 }
 
 /// The node's values from `nodes.toml`, as env vars for `firmware/node/src/config.rs`.
-fn node_env(node: &Node) -> BTreeMap<&'static str, String> {
-    BTreeMap::from([
+fn node_env(node: &Node) -> BTreeMap<String, String> {
+    [
         ("AIO_NODE_ID", node.node_id.to_string()),
         ("AIO_HEARTBEAT", node.heartbeat.to_string()),
         ("AIO_MIN_INTERVAL", node.min_interval.to_string()),
-    ])
+    ]
+    .into_iter()
+    .map(|(var, value)| (var.to_string(), value))
+    .collect()
+}
+
+/// The board's pins from `boards.toml`, as env vars for `firmware/node/src/config.rs`.
+/// `lora.sck = 6` becomes `AIO_PIN_LORA_SCK=6`. Pins the board doesn't have
+/// (like `busy` on an SX127x board) aren't exported.
+fn pin_env(board: &Board) -> BTreeMap<String, String> {
+    board
+        .pins()
+        .into_iter()
+        .map(|(name, gpio)| {
+            let var = format!("AIO_PIN_{}", name.replace('.', "_").to_uppercase());
+            (var, gpio.to_string())
+        })
+        .collect()
 }
 
 impl Firmware {
@@ -151,5 +171,28 @@ impl Chip {
             Chip::Esp32c6 => "esp32c6",
             Chip::Esp32s3 => "esp32s3",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pins_become_env_vars() {
+        let board: Board = toml::from_str(
+            r#"
+            chip = "esp32c6"
+            radio = "sx127x"
+            lora = { sck = 6, mosi = 7, miso = 2, cs = 18, rst = 19, irq = 20 }
+            "#,
+        )
+        .unwrap();
+        let env = pin_env(&board);
+        assert_eq!(env["AIO_PIN_LORA_SCK"], "6");
+        assert_eq!(env["AIO_PIN_LORA_IRQ"], "20");
+        // An SX127x board has no `busy` pin, so it isn't exported.
+        assert!(!env.contains_key("AIO_PIN_LORA_BUSY"));
+        assert_eq!(env.len(), 6);
     }
 }
