@@ -132,7 +132,7 @@ fn load<T: for<'de> Deserialize<'de>>(name: &str) -> Result<T, String> {
 }
 
 /// The repo root is the folder that holds `xtask/`.
-fn repo_root() -> PathBuf {
+pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("xtask/ is inside the repo")
