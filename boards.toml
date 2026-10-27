@@ -2,10 +2,10 @@
 # Each source adds its own pins (1-Wire, UART, ...) when it gets ported.
 # A device's pins are decided right before it gets flashed; until then they may be placeholders.
 
-[boards.c6-dev]                  # placeholder pins; set the real ones before you flash
+[boards.c6-dev]                  # from the board's schematic
 chip = "esp32c6"
-radio = "sx126x"
-lora = { sck = 6, mosi = 7, miso = 2, cs = 18, rst = 19, irq = 20, busy = 21 }
+radio = "sx127x"                 # SX1276
+lora = { sck = 20, mosi = 19, miso = 18, cs = 21, rst = 22 }   # DIO0 isn't wired, so the firmware polls the radio
 
 [boards.t3s3]                    # from docs/legacy-porting.md
 chip = "esp32s3"

@@ -20,6 +20,7 @@ pub fn run(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Result<(), St
         errors.extend(no_pin_twice(name, board));
         errors.extend(no_flash_pins(name, board));
         errors.extend(busy_matches_radio(name, board));
+        errors.extend(irq_on_sx126x(name, board));
         warnings.extend(strapping_pins(name, board));
     }
 
@@ -147,6 +148,17 @@ fn busy_matches_radio(name: &str, board: &Board) -> Vec<String> {
         (Radio::Sx126x, None) => vec![format!("board `{name}`: sx126x radios need lora.busy")],
         (Radio::Sx127x, Some(_)) => vec![format!(
             "board `{name}`: sx127x radios have no BUSY pin, remove lora.busy"
+        )],
+        _ => Vec::new(),
+    }
+}
+
+/// SX126x boards must wire the IRQ pin. SX127x boards may leave it out,
+/// because the firmware can poll an SX127x radio over SPI instead.
+fn irq_on_sx126x(name: &str, board: &Board) -> Vec<String> {
+    match (&board.radio, board.lora.irq) {
+        (Radio::Sx126x, None) => vec![format!(
+            "board `{name}`: sx126x radios need lora.irq (DIO1)"
         )],
         _ => Vec::new(),
     }
@@ -404,5 +416,36 @@ mod tests {
             "#,
         );
         assert!(busy_matches_radio("test", &sx127x_without_busy).is_empty());
+    }
+
+    #[test]
+    fn irq_required_only_on_sx126x() {
+        let sx126x_without_irq = board(
+            r#"
+            chip = "esp32c6"
+            radio = "sx126x"
+            lora = { sck = 6, mosi = 7, miso = 2, cs = 18, rst = 19, busy = 21 }
+            "#,
+        );
+        assert_eq!(
+            irq_on_sx126x("test", &sx126x_without_irq),
+            ["board `test`: sx126x radios need lora.irq (DIO1)"]
+        );
+
+        let sx127x_without_irq = board(
+            r#"
+            chip = "esp32c6"
+            radio = "sx127x"
+            lora = { sck = 6, mosi = 7, miso = 2, cs = 18, rst = 19 }
+            "#,
+        );
+        assert!(irq_on_sx126x("test", &sx127x_without_irq).is_empty());
+        // The firmware learns that the pin is missing because it isn't exported.
+        assert!(
+            !sx127x_without_irq
+                .pins()
+                .iter()
+                .any(|(pin, _)| pin == "lora.irq")
+        );
     }
 }

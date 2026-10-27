@@ -56,8 +56,9 @@ pub struct LoraPins {
     pub miso: u8,
     pub cs: u8,
     pub rst: u8,
-    /// DIO1 on SX126x, DIO0 on SX127x.
-    pub irq: u8,
+    /// DIO1 on SX126x, DIO0 on SX127x. SX127x boards may leave it out; the
+    /// firmware then polls the radio over SPI instead.
+    pub irq: Option<u8>,
     /// Only SX126x radios have a BUSY pin.
     pub busy: Option<u8>,
 }
@@ -71,8 +72,10 @@ impl LoraPins {
             ("miso", self.miso),
             ("cs", self.cs),
             ("rst", self.rst),
-            ("irq", self.irq),
         ];
+        if let Some(irq) = self.irq {
+            pins.push(("irq", irq));
+        }
         if let Some(busy) = self.busy {
             pins.push(("busy", busy));
         }

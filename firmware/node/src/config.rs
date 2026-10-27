@@ -24,8 +24,12 @@ pub const LORA_MOSI: u8 = parse_u8(env!("AIO_PIN_LORA_MOSI"));
 pub const LORA_MISO: u8 = parse_u8(env!("AIO_PIN_LORA_MISO"));
 pub const LORA_CS: u8 = parse_u8(env!("AIO_PIN_LORA_CS"));
 pub const LORA_RST: u8 = parse_u8(env!("AIO_PIN_LORA_RST"));
-/// DIO1 on SX126x, DIO0 on SX127x.
-pub const LORA_IRQ: u8 = parse_u8(env!("AIO_PIN_LORA_IRQ"));
+/// DIO1 on SX126x, DIO0 on SX127x. SX127x boards may leave it out; the
+/// firmware then polls the radio over SPI instead.
+pub const LORA_IRQ: Option<u8> = match option_env!("AIO_PIN_LORA_IRQ") {
+    Some(s) => Some(parse_u8(s)),
+    None => None,
+};
 /// Only SX126x radios have a BUSY pin.
 pub const LORA_BUSY: Option<u8> = match option_env!("AIO_PIN_LORA_BUSY") {
     Some(s) => Some(parse_u8(s)),

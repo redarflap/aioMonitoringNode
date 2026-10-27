@@ -475,9 +475,14 @@ Commit: `Run on the S3`
 4. Create `src/radio.rs` with the radio settings from "Radio" in `ARCHITECTURE.md`: 868.0 MHz, SF7, BW 125 kHz, CR 4/5, preamble 8, CRC on, 14 dBm. Create the `lora-phy` `LoRa` object with `public_network = false`.
    - `sx126x`: DIO2 as RF switch, TCXO on DIO3, LDO regulator.
    - `sx127x`: PA_BOOST.
-5. The TCXO voltage is a board setting. Add `tcxo_mv = 1800` to the t3s3 in `boards.toml`; boards without a TCXO leave it out. The xtask exports it like a pin. `cargo xtask check` accepts it only on `sx126x` boards and only with a value `lora-phy` supports (1600, 1700, 1800, 2200, 2400, 2700, 3000, 3300).
+5. The c6-dev board has no `irq` pin (its DIO0 isn't wired), so it needs the software stand-in described under "Radio" in `ARCHITECTURE.md`. Put it in `src/radio.rs`:
+   - Add `embassy-sync` and `embedded-hal-async` to the dependencies.
+   - Put the SPI device into an `embassy_sync::mutex::Mutex`. Give `lora-phy` a small wrapper around it that implements `embedded_hal_async::spi::SpiDevice` by locking the mutex for each transaction.
+   - Write a type that implements `embedded_hal_async::digital::Wait`; `lora-phy` only calls `wait_for_high`. It locks the same mutex and reads register 0x12: send the bytes `[0x12, 0x00]`, and the second byte that comes back is the value. It repeats this every 1 ms until the value isn't 0. Pass it to `GenericSx127xInterfaceVariant` where the IRQ pin would go.
+   - When a board has an `irq` pin, `board::init` passes the real pin instead, and nothing else changes.
+6. The TCXO voltage is a board setting. Add `tcxo_mv = 1800` to the t3s3 in `boards.toml`; boards without a TCXO leave it out. The xtask exports it like a pin. `cargo xtask check` accepts it only on `sx126x` boards and only with a value `lora-phy` supports (1600, 1700, 1800, 2200, 2400, 2700, 3000, 3300).
 
-Before you flash, set the real LoRa pins of your dev boards in `boards.toml`.
+The c6-dev pins come from its schematic. Before you flash the S3, check the t3s3 pins in `boards.toml` against your board.
 
 **Check:** both boards log `radio ready`. With a wrong pin, start-up logs an error instead of hanging. If an SX126x radio doesn't start, try `tcxo_mv = 3300`, the value the legacy code used.
 
@@ -487,9 +492,11 @@ Commit: `Add board module and LoRa driver`
 
 Add `send(bytes)` to `src/radio.rs`. In `main`, send `[NODE_ID, 0xAA, 0x55]` every `HEARTBEAT_S` seconds. These test bytes only live until `crates/proto` defines the real packet.
 
+Wrap the wait for "sent" in `embassy_time::with_timeout` with about 2 s, and log an error when it runs out. Without it, a radio that never reports "done" would hang the node.
+
 The xtask already keeps `node_id` out of `reserved_node_ids`, so the legacy Node-RED flow ignores these packets.
 
-**Check:** watch the OpenMQTTGateway topic with MQTT Explorer. A message with the bytes `64 AA 55` (100 = 0x64) arrives every 60 s.
+**Check:** watch the OpenMQTTGateway topic with MQTT Explorer. Every 60 s, a message with the bytes `64 AA 55` arrives from dev-c6 (100 = 0x64) and `65 AA 55` from dev-s3 (101 = 0x65).
 
 Commit: `Send a LoRa test packet`
 
