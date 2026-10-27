@@ -33,7 +33,7 @@ impl Board {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Chip {
     Esp32c6,

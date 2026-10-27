@@ -64,8 +64,16 @@ fn linker_be_nice() {
         std::process::exit(0);
     }
 
+    // The C6 links with `rust-lld` directly. The S3 links through
+    // `xtensa-esp32s3-elf-gcc`, which only hands an option on to the linker with
+    // `-Wl,` in front. S3 only; delete the `if` together with S3 support.
+    let linker_option = if std::env::var_os("CARGO_FEATURE_ESP32S3").is_some() {
+        "-Wl,"
+    } else {
+        ""
+    };
     println!(
-        "cargo:rustc-link-arg=--error-handling-script={}",
+        "cargo:rustc-link-arg={linker_option}--error-handling-script={}",
         std::env::current_exe().unwrap().display()
     );
 }

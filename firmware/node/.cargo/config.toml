@@ -8,3 +8,12 @@ rustflags = [
   # NOTE: May negatively impact performance of produced code
   "-C", "force-frame-pointers",
 ]
+
+# S3 only; delete this table together with S3 support.
+[target.xtensa-esp32s3-none-elf]
+rustflags = [
+  "-C", "link-arg=-nostartfiles",
+  # The linker warns that a memory region is readable, writable and executable.
+  # That is normal on the S3, which doesn't enforce these permissions here.
+  "-C", "link-arg=-Wl,--no-warn-rwx-segments",
+]

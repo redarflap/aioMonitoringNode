@@ -134,7 +134,7 @@ Only the C6 and the S3 are supported (no H2).
 | Low-power coprocessor | LP core, `riscv32imac-unknown-none-elf`, LP GPIO 0–7 only | ULP-RISC-V, `riscv32imc-unknown-none-elf`, RTC GPIO 0–21 |
 | TWAI (CAN) | 2 | 1 |
 
-S3 stays fully supported for now. Still, keep S3-only code inside `board/`, `#[cfg(feature = "esp32s3")]` blocks and the xtask's toolchain switch, so it can be dropped later just by deleting it.
+S3 stays fully supported for now. Still, keep S3-only code inside `board/`, `#[cfg(feature = "esp32s3")]` blocks, the xtask's toolchain switch (`Chip::cargo`) and the spots marked "S3 only" in `firmware/node/build.rs` and `firmware/node/.cargo/config.toml`, so it can be dropped later just by deleting it.
 
 The `ds18b20` source polls from the HP core on always-on nodes. On deep-sleep nodes, `lp-tempsense` polls on the coprocessor, which can only drive 1-Wire on LP/RTC-capable pins. The xtask's `boards.toml` validation enforces this.
 
@@ -151,7 +151,7 @@ The root `.cargo/config.toml` sets no build target and defines `xtask = "run -p 
 
 1. It resolves node → sources + board → chip/radio → target, toolchain and features. It validates the board's pins and the node, then exports both the pins and the node parameters.
 2. It builds `lp-tempsense` first when a deep-sleep C6/S3 node has the `ds18b20` source, because the HP crate embeds that ELF.
-3. For S3 it adds `+esp` and `-Zbuild-std=core,alloc`.
+3. For S3 it adds `+esp` and `-Zbuild-std=core`. Add `alloc` there if a node ever needs `esp-alloc`.
 4. It always builds `--release` (opt-level `"s"`). Unoptimised esp-hal code breaks bit-banged 1-Wire timing and the LP-core size budget.
 5. For `run`, it publishes `schemas.json` and only then flashes and monitors with espflash (see [Decoding & Home Assistant](#decoding--home-assistant)).
 

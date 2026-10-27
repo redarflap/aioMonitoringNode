@@ -11,3 +11,10 @@ node_id = 100
 power = "always-on"
 heartbeat = 60      # s, short for testing
 min_interval = 10   # s
+
+[nodes.dev-s3]
+board = "t3s3"
+node_id = 101
+power = "always-on"
+heartbeat = 60      # s, short for testing
+min_interval = 10   # s

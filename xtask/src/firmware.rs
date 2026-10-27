@@ -9,10 +9,8 @@ use crate::validate;
 
 /// What cargo needs to know to build the firmware of one node.
 struct Firmware {
-    /// The compiler's name for the chip's CPU, for example `riscv32imac-unknown-none-elf`.
-    target: &'static str,
-    /// The cargo feature that picks the chip in `firmware/node`.
-    chip_feature: &'static str,
+    /// The chip of the node's board.
+    chip: Chip,
     /// `AIO_*` env vars with the node's values and its board's pins. The firmware
     /// reads them with `env!`.
     env: BTreeMap<String, String>,
@@ -74,8 +72,7 @@ fn resolve(node_name: &str) -> Result<Firmware, String> {
     let mut env = node_env(node);
     env.extend(pin_env(board));
     Ok(Firmware {
-        target: board.chip.target()?,
-        chip_feature: board.chip.feature(),
+        chip: board.chip,
         env,
     })
 }
@@ -113,9 +110,10 @@ impl Firmware {
     fn cargo(&self, subcommand: &str) -> Result<(), String> {
         wait(
             &format!("cargo {subcommand}"),
-            Command::new("cargo")
-                .args([subcommand, "--release", "--target", self.target])
-                .args(["--features", self.chip_feature])
+            self.chip
+                .cargo(subcommand)
+                .args(["--release", "--target", self.chip.target()])
+                .args(["--features", self.chip.feature()])
                 .envs(&self.env)
                 .current_dir(config::repo_root().join("firmware").join("node")),
         )
@@ -126,7 +124,7 @@ impl Firmware {
     fn elf(&self) -> PathBuf {
         config::repo_root()
             .join("target")
-            .join(self.target)
+            .join(self.chip.target())
             .join("release")
             .join("node")
     }
@@ -157,11 +155,29 @@ fn wait(name: &str, command: &mut Command) -> Result<(), String> {
 }
 
 impl Chip {
-    /// The compiler's name for the chip's CPU.
-    fn target(&self) -> Result<&'static str, String> {
+    /// Starts `cargo <subcommand>` with the toolchain this chip needs.
+    ///
+    /// It starts `cargo` by name, not through the `CARGO` env var that
+    /// `cargo xtask` sets: that one points straight to the stable cargo, which
+    /// doesn't understand `+esp`.
+    fn cargo(&self, subcommand: &str) -> Command {
+        let mut command = Command::new("cargo");
         match self {
-            Chip::Esp32c6 => Ok("riscv32imac-unknown-none-elf"),
-            Chip::Esp32s3 => Err("S3 nodes can't be built yet".to_string()),
+            Chip::Esp32c6 => command.arg(subcommand),
+            // S3 only; delete this arm together with S3 support. Normal Rust can't
+            // compile for the S3's Xtensa CPU, so it takes Espressif's `esp`
+            // toolchain. That one has no ready-made `core` library for the S3, so
+            // cargo builds it from source (`build-std`).
+            Chip::Esp32s3 => command.args(["+esp", subcommand, "-Zbuild-std=core"]),
+        };
+        command
+    }
+
+    /// The compiler's name for the chip's CPU.
+    fn target(&self) -> &'static str {
+        match self {
+            Chip::Esp32c6 => "riscv32imac-unknown-none-elf",
+            Chip::Esp32s3 => "xtensa-esp32s3-none-elf",
         }
     }
 
