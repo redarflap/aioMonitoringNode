@@ -28,7 +28,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
     // generator version: 1.4.0
-    // generator parameters: -o esp32c6 -o unstable-hal -o embassy -o defmt -o esp-backtrace
+    // generator parameters: -o esp32c6 -o unstable-hal -o embassy -o defmt -o esp-backtrace (-o esp32s3 generates the same code)
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
