@@ -26,6 +26,31 @@ pub fn clippy(node_name: &str) -> Result<(), String> {
     resolve(node_name)?.cargo("clippy")
 }
 
+/// Builds the node's firmware, flashes it and shows the log.
+pub fn run(node_name: &str, port: Option<&str>) -> Result<(), String> {
+    let elf = build(node_name)?;
+    wait(
+        "espflash flash",
+        espflash("flash", port).arg("--monitor").arg(&elf),
+    )
+}
+
+/// Shows the log of a node that is already flashed. espflash needs the ELF file
+/// to turn the defmt log back into text.
+pub fn monitor(node_name: &str, port: Option<&str>) -> Result<(), String> {
+    let elf = resolve(node_name)?.elf();
+    if !elf.exists() {
+        return Err(format!(
+            "{} doesn't exist; run `cargo xtask build {node_name}` first",
+            elf.display()
+        ));
+    }
+    wait(
+        "espflash monitor",
+        espflash("monitor", port).arg("--elf").arg(&elf),
+    )
+}
+
 /// Validates the config files, then looks up the node and its board.
 fn resolve(node_name: &str) -> Result<Firmware, String> {
     let boards = config::load_boards()?;
@@ -52,17 +77,13 @@ impl Firmware {
     /// Runs `cargo <subcommand>` inside `firmware/node`, so cargo also reads
     /// `firmware/node/.cargo/config.toml`.
     fn cargo(&self, subcommand: &str) -> Result<(), String> {
-        let status = Command::new("cargo")
-            .args([subcommand, "--release", "--target", self.target])
-            .args(["--features", self.chip_feature])
-            .current_dir(config::repo_root().join("firmware").join("node"))
-            .status()
-            .map_err(|e| format!("can't start cargo: {e}"))?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(format!("cargo {subcommand} failed"))
-        }
+        wait(
+            &format!("cargo {subcommand}"),
+            Command::new("cargo")
+                .args([subcommand, "--release", "--target", self.target])
+                .args(["--features", self.chip_feature])
+                .current_dir(config::repo_root().join("firmware").join("node")),
+        )
     }
 
     /// The file that `cargo build` writes. All crates of the workspace share the
@@ -73,6 +94,30 @@ impl Firmware {
             .join(self.target)
             .join("release")
             .join("node")
+    }
+}
+
+/// Starts an `espflash <subcommand>` command that decodes the defmt log.
+/// Without a port, espflash looks for the board itself.
+fn espflash(subcommand: &str, port: Option<&str>) -> Command {
+    let mut command = Command::new("espflash");
+    command.args([subcommand, "--log-format", "defmt"]);
+    if let Some(port) = port {
+        command.args(["--port", port]);
+    }
+    command
+}
+
+/// Runs `command` and waits until it ends. Its output goes straight to the terminal.
+/// `name` is what error messages call it, for example `cargo build`.
+fn wait(name: &str, command: &mut Command) -> Result<(), String> {
+    let status = command
+        .status()
+        .map_err(|e| format!("can't start {name}: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("{name} failed"))
     }
 }
 

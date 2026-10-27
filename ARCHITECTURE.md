@@ -169,7 +169,7 @@ cargo fmt
 # firmware (<node> = entry name in nodes.toml)
 cargo xtask build   <node>
 cargo xtask run     <node> [--port COM5]       # build + flash + monitor
-cargo xtask monitor <node>                     # reattach monitor (needs the ELF for defmt)
+cargo xtask monitor <node> [--port COM5]       # reattach monitor (needs the ELF for defmt)
 cargo xtask clippy  <node>
 
 # receiver side
