@@ -4,8 +4,9 @@
 //! An empty list means the rule passed.
 
 use std::collections::BTreeMap;
+use std::ops::RangeInclusive;
 
-use crate::config::{Board, Chip, NodesFile, Radio};
+use crate::config::{Board, Chip, NodesFile, Radio, Source};
 
 /// Runs every rule and prints what they find. Warnings are only printed, errors fail the check.
 pub fn run(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Result<(), String> {
@@ -15,6 +16,8 @@ pub fn run(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Result<(), St
     errors.extend(boards_exist(boards, nodes));
     errors.extend(unique_node_ids(nodes));
     errors.extend(no_reserved_node_ids(nodes));
+    errors.extend(has_sources(nodes));
+    errors.extend(sources_have_pins(boards, nodes));
     for (name, board) in boards {
         errors.extend(pins_exist(name, board));
         errors.extend(no_pin_twice(name, board));
@@ -22,6 +25,8 @@ pub fn run(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Result<(), St
         errors.extend(busy_matches_radio(name, board));
         errors.extend(irq_on_sx126x(name, board));
         errors.extend(tcxo_matches_radio(name, board));
+        errors.extend(battery_on_adc1(name, board));
+        errors.extend(divider_at_least_one(name, board));
         warnings.extend(strapping_pins(name, board));
     }
 
@@ -81,6 +86,47 @@ fn no_reserved_node_ids(nodes: &NodesFile) -> Vec<String> {
             errors.push(format!(
                 "node `{name}`: node_id {id} ({id:#04x}) is in reserved_node_ids"
             ));
+        }
+    }
+    errors
+}
+
+/// Every node runs at least one source, because a packet holds at least one section.
+fn has_sources(nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (name, node) in &nodes.nodes {
+        if node.sources.is_empty() {
+            errors.push(format!(
+                "node `{name}`: no sources, but a packet needs at least one; \
+                 add one like `sources.battery = {{}}`"
+            ));
+        }
+    }
+    errors
+}
+
+/// Each source of a node finds its pins on the node's board.
+fn sources_have_pins(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (name, node) in &nodes.nodes {
+        // `boards_exist` already reports a missing board.
+        let Some(board) = boards.get(&node.board) else {
+            continue;
+        };
+        for source in node.sources.keys() {
+            // The pin group the source needs, and whether the board has it.
+            let (group, found) = match source {
+                Source::Battery => ("battery", board.battery.is_some()),
+                // Not ported yet, so they have no pins yet.
+                Source::Ds18b20 | Source::Eder | Source::Pyromat => continue,
+            };
+            if !found {
+                errors.push(format!(
+                    "node `{name}`: source `{}` needs `{group}` pins, but board `{}` has none",
+                    source.name(),
+                    node.board
+                ));
+            }
         }
     }
     errors
@@ -181,6 +227,36 @@ fn tcxo_matches_radio(name: &str, board: &Board) -> Vec<String> {
     }
 }
 
+/// The battery is read through ADC1: the C6 has no other ADC, so the battery
+/// driver only supports ADC1.
+fn battery_on_adc1(name: &str, board: &Board) -> Vec<String> {
+    let adc1 = board.chip.adc1_pins();
+    match &board.battery {
+        Some(battery) if !adc1.contains(&battery.adc) => vec![format!(
+            "board `{name}`: battery.adc is GPIO {}, which isn't on ADC1; \
+             the {:?} has ADC1 on GPIO {} to {}",
+            battery.adc,
+            board.chip,
+            adc1.start(),
+            adc1.end()
+        )],
+        _ => Vec::new(),
+    }
+}
+
+/// A voltage divider only makes the voltage smaller, so battery voltage / pin
+/// voltage is at least 1.
+fn divider_at_least_one(name: &str, board: &Board) -> Vec<String> {
+    match &board.battery {
+        Some(battery) if battery.divider < 1.0 => vec![format!(
+            "board `{name}`: battery.divider = {} is below 1; it's battery voltage / pin voltage, \
+             for example 2.0 for two equal resistors",
+            battery.divider
+        )],
+        _ => Vec::new(),
+    }
+}
+
 impl Chip {
     /// Does the chip have this GPIO?
     fn has_gpio(&self, gpio: u8) -> bool {
@@ -206,6 +282,26 @@ impl Chip {
         match self {
             Chip::Esp32c6 => matches!(gpio, 4 | 5 | 8 | 9 | 15),
             Chip::Esp32s3 => matches!(gpio, 0 | 3 | 45 | 46),
+        }
+    }
+
+    /// The GPIOs that ADC1 can read.
+    fn adc1_pins(&self) -> RangeInclusive<u8> {
+        match self {
+            Chip::Esp32c6 => 0..=6,
+            Chip::Esp32s3 => 1..=10,
+        }
+    }
+}
+
+impl Source {
+    /// The source's name in `nodes.toml`.
+    fn name(&self) -> &'static str {
+        match self {
+            Source::Ds18b20 => "ds18b20",
+            Source::Battery => "battery",
+            Source::Eder => "eder",
+            Source::Pyromat => "pyromat",
         }
     }
 }
@@ -284,6 +380,54 @@ mod tests {
         assert_eq!(
             no_reserved_node_ids(&nodes),
             ["node `bad`: node_id 124 (0x7c) is in reserved_node_ids"]
+        );
+    }
+
+    #[test]
+    fn node_needs_a_source() {
+        let nodes = nodes(
+            r#"
+            reserved_node_ids = []
+            nodes.good = { board = "c6-dev", node_id = 100, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = {} }
+            nodes.bad = { board = "c6-dev", node_id = 101, power = "always-on", heartbeat = 60, min_interval = 10 }
+            "#,
+        );
+        assert_eq!(
+            has_sources(&nodes),
+            ["node `bad`: no sources, but a packet needs at least one; \
+                 add one like `sources.battery = {}`"]
+        );
+    }
+
+    #[test]
+    fn sources_need_their_pins() {
+        let boards: BTreeMap<String, Board> = toml::from_str(
+            r#"
+            [with-battery]
+            chip = "esp32c6"
+            radio = "sx127x"
+            lora = { sck = 16, mosi = 17, miso = 18, cs = 19, rst = 20 }
+            battery = { adc = 2, divider = 2.0 }
+
+            [without-battery]
+            chip = "esp32c6"
+            radio = "sx127x"
+            lora = { sck = 16, mosi = 17, miso = 18, cs = 19, rst = 20 }
+            "#,
+        )
+        .unwrap();
+        let nodes = nodes(
+            r#"
+            reserved_node_ids = []
+            nodes.good = { board = "with-battery", node_id = 100, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = {} }
+            nodes.bad = { board = "without-battery", node_id = 101, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = {} }
+            "#,
+        );
+        assert_eq!(
+            sources_have_pins(&boards, &nodes),
+            [
+                "node `bad`: source `battery` needs `battery` pins, but board `without-battery` has none"
+            ]
         );
     }
 
@@ -513,6 +657,69 @@ mod tests {
         assert_eq!(
             tcxo_matches_radio("test", &sx127x),
             ["board `test`: tcxo_mv is only for sx126x radios, remove it"]
+        );
+    }
+
+    /// A board on `chip` with `battery = <battery>`, for example `{ adc = 1, divider = 2.0 }`.
+    fn with_battery(chip: &str, battery: &str) -> Board {
+        board(&format!(
+            r#"
+            chip = "{chip}"
+            radio = "sx127x"
+            lora = {{ sck = 16, mosi = 17, miso = 18, cs = 19, rst = 20 }}
+            battery = {battery}
+            "#
+        ))
+    }
+
+    #[test]
+    fn battery_must_be_on_adc1() {
+        // The first and last ADC1 pin of each chip.
+        for (chip, adc) in [
+            ("esp32c6", 0),
+            ("esp32c6", 6),
+            ("esp32s3", 1),
+            ("esp32s3", 10),
+        ] {
+            let good = with_battery(chip, &format!("{{ adc = {adc}, divider = 2.0 }}"));
+            assert!(
+                battery_on_adc1("test", &good).is_empty(),
+                "{chip} GPIO {adc}"
+            );
+        }
+
+        let c6 = with_battery("esp32c6", "{ adc = 7, divider = 2.0 }");
+        assert_eq!(
+            battery_on_adc1("test", &c6),
+            ["board `test`: battery.adc is GPIO 7, which isn't on ADC1; \
+                 the Esp32c6 has ADC1 on GPIO 0 to 6"]
+        );
+
+        // GPIO 11 is on the S3's ADC2.
+        let s3 = with_battery("esp32s3", "{ adc = 11, divider = 2.0 }");
+        assert_eq!(
+            battery_on_adc1("test", &s3),
+            [
+                "board `test`: battery.adc is GPIO 11, which isn't on ADC1; \
+                 the Esp32s3 has ADC1 on GPIO 1 to 10"
+            ]
+        );
+    }
+
+    #[test]
+    fn divider_must_be_at_least_one() {
+        // 1.0 means no divider: the battery is wired straight to the pin.
+        let good = with_battery("esp32c6", "{ adc = 2, divider = 1.0 }");
+        assert!(divider_at_least_one("test", &good).is_empty());
+
+        // Written upside down: pin voltage / battery voltage.
+        let bad = with_battery("esp32c6", "{ adc = 2, divider = 0.5 }");
+        assert_eq!(
+            divider_at_least_one("test", &bad),
+            [
+                "board `test`: battery.divider = 0.5 is below 1; it's battery voltage / pin voltage, \
+                 for example 2.0 for two equal resistors"
+            ]
         );
     }
 }

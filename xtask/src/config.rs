@@ -125,7 +125,8 @@ pub struct Node {
     /// Fewest seconds between two packets.
     pub min_interval: u32,
     /// The sources the node runs, from `sources.<name> = { ... }`.
-    /// A node without sources leaves them out.
+    /// A node needs at least one, but leaving them out still parses, so that
+    /// `validate.rs` can say why it's wrong.
     #[serde(default)]
     pub sources: BTreeMap<Source, SourceParams>,
 }
@@ -197,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn sources_are_optional() {
+    fn missing_sources_still_parse() {
         assert!(node("").unwrap().sources.is_empty());
     }
 

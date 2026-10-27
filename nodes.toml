@@ -1,5 +1,6 @@
 # Deployments: node name -> board, node_id, power mode, send intervals and sources.
-# `sources.<name> = {}` turns a source on. Its parameters go inside the braces once it's ported.
+# `sources.<name> = {}` turns a source on; every node needs at least one.
+# Its parameters go inside the braces once it's ported.
 # HA devices arrive in a later step.
 
 # First bytes that legacy nodes still send: feather-s3 0x00, pyromat 0x01, t3s3 0x02,
@@ -20,3 +21,4 @@ node_id = 101
 power = "always-on"
 heartbeat = 60      # s, short for testing
 min_interval = 10   # s
+sources.battery = {}
