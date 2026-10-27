@@ -36,7 +36,12 @@ esp-rtos = "=0.4.0"
 critical-section = "1.2.0"
 defmt = "1.0.1"
 embassy-executor = "0.10.0"
+embassy-sync = "0.8.0"
 embassy-time = "0.5.0"
+embedded-hal = "1.0.0"
+embedded-hal-async = "1.0.0"
+embedded-hal-bus = "0.3.0"
+lora-phy = "3.0.1"
 static_cell = "2.1.1"
 
 # Profiles from the esp-generate template.

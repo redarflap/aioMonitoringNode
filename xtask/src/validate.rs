@@ -21,6 +21,7 @@ pub fn run(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Result<(), St
         errors.extend(no_flash_pins(name, board));
         errors.extend(busy_matches_radio(name, board));
         errors.extend(irq_on_sx126x(name, board));
+        errors.extend(tcxo_matches_radio(name, board));
         warnings.extend(strapping_pins(name, board));
     }
 
@@ -159,6 +160,22 @@ fn irq_on_sx126x(name: &str, board: &Board) -> Vec<String> {
     match (&board.radio, board.lora.irq) {
         (Radio::Sx126x, None) => vec![format!(
             "board `{name}`: sx126x radios need lora.irq (DIO1)"
+        )],
+        _ => Vec::new(),
+    }
+}
+
+/// The TCXO voltages in mV that lora-phy can set on an SX126x.
+const TCXO_MV: [u16; 8] = [1600, 1700, 1800, 2200, 2400, 2700, 3000, 3300];
+
+/// `tcxo_mv` is only for SX126x radios, and only with a voltage lora-phy can set.
+fn tcxo_matches_radio(name: &str, board: &Board) -> Vec<String> {
+    match (&board.radio, board.tcxo_mv) {
+        (Radio::Sx127x, Some(_)) => vec![format!(
+            "board `{name}`: tcxo_mv is only for sx126x radios, remove it"
+        )],
+        (Radio::Sx126x, Some(mv)) if !TCXO_MV.contains(&mv) => vec![format!(
+            "board `{name}`: tcxo_mv = {mv} isn't supported, use one of {TCXO_MV:?}"
         )],
         _ => Vec::new(),
     }
@@ -446,6 +463,56 @@ mod tests {
                 .pins()
                 .iter()
                 .any(|(pin, _)| pin == "lora.irq")
+        );
+    }
+
+    #[test]
+    fn tcxo_only_on_sx126x() {
+        let sx126x = board(
+            r#"
+            chip = "esp32s3"
+            radio = "sx126x"
+            tcxo_mv = 1800
+            lora = { sck = 5, mosi = 6, miso = 3, cs = 7, rst = 8, irq = 33, busy = 34 }
+            "#,
+        );
+        assert!(tcxo_matches_radio("test", &sx126x).is_empty());
+
+        // Boards without a TCXO leave it out.
+        let sx126x_without_tcxo = board(
+            r#"
+            chip = "esp32s3"
+            radio = "sx126x"
+            lora = { sck = 5, mosi = 6, miso = 3, cs = 7, rst = 8, irq = 33, busy = 34 }
+            "#,
+        );
+        assert!(tcxo_matches_radio("test", &sx126x_without_tcxo).is_empty());
+
+        let unsupported = board(
+            r#"
+            chip = "esp32s3"
+            radio = "sx126x"
+            tcxo_mv = 1900
+            lora = { sck = 5, mosi = 6, miso = 3, cs = 7, rst = 8, irq = 33, busy = 34 }
+            "#,
+        );
+        assert_eq!(
+            tcxo_matches_radio("test", &unsupported),
+            ["board `test`: tcxo_mv = 1900 isn't supported, \
+                 use one of [1600, 1700, 1800, 2200, 2400, 2700, 3000, 3300]"]
+        );
+
+        let sx127x = board(
+            r#"
+            chip = "esp32c6"
+            radio = "sx127x"
+            tcxo_mv = 1800
+            lora = { sck = 6, mosi = 7, miso = 2, cs = 18, rst = 19 }
+            "#,
+        );
+        assert_eq!(
+            tcxo_matches_radio("test", &sx127x),
+            ["board `test`: tcxo_mv is only for sx126x radios, remove it"]
         );
     }
 }

@@ -488,6 +488,14 @@ The c6-dev pins come from its schematic. Before you flash the S3, check the t3s3
 
 Commit: `Add board module and LoRa driver`
 
+**Status (2026-10-27):** the code differs from the steps above in these places:
+
+- `board::init` also starts esp-rtos. `esp_rtos::start` keeps its two peripherals forever, so `main` couldn't pass the rest of `Peripherals` on afterwards.
+- There are no `src/board/esp32c6.rs` and `esp32s3.rs` yet, because nothing differs between the chips: both use SPI2, and any GPIO can be an SPI pin.
+- `src/radio.rs` holds what both radio families share. The rest is in `src/radio/sx126x.rs` and `src/radio/sx127x.rs`; the SX127x stand-in for DIO0 is `Dio0::Poll`.
+- The firmware also needs `embedded-hal`, where the digital `ErrorType` lives.
+- Start-up reads back the sync word. Without that check, an SX127x with a wrong SPI or CS pin would still log `radio ready`, because `lora-phy` only writes to it while it starts.
+
 ### 6.2 Send a test packet
 
 Add `send(bytes)` to `src/radio.rs`. In `main`, send `[NODE_ID, 0xAA, 0x55]` every `HEARTBEAT_S` seconds. These test bytes only live until `crates/proto` defines the real packet.

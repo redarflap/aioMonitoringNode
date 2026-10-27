@@ -21,6 +21,9 @@ esp32s3 = [
   "esp-println/esp32s3",
   "esp-rtos/esp32s3",
 ]
+# The radio chip is picked the same way, from the board's `radio`.
+sx126x = []
+sx127x = []
 
 [dependencies]
 esp-hal = { workspace = true, features = ["defmt", "unstable"] }
@@ -40,3 +43,10 @@ esp-println = { workspace = true, features = ["defmt-espflash"] }
 
 critical-section = { workspace = true }
 static_cell = { workspace = true }
+
+# LoRa radio driver, and what it needs to talk to the radio over SPI.
+embassy-sync = { workspace = true }
+embedded-hal = { workspace = true }
+embedded-hal-async = { workspace = true }
+embedded-hal-bus = { workspace = true, features = ["async"] }
+lora-phy = { workspace = true }

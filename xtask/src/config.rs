@@ -18,6 +18,9 @@ struct BoardsFile {
 pub struct Board {
     pub chip: Chip,
     pub radio: Radio,
+    /// SX126x only: the voltage in mV that the radio feeds its TCXO through DIO3.
+    /// Boards without a TCXO leave it out.
+    pub tcxo_mv: Option<u16>,
     pub lora: LoraPins,
 }
 
@@ -40,7 +43,7 @@ pub enum Chip {
     Esp32s3,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Radio {
     Sx126x,

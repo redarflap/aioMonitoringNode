@@ -7,14 +7,15 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
+mod board;
 mod config;
+mod radio;
 
-use defmt::info;
+use defmt::{error, info};
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::timer::timg::TimerGroup;
 use esp_println as _;
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
@@ -32,9 +33,7 @@ async fn main(spawner: Spawner) -> ! {
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
-
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
-    esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
+    let board = board::init(peripherals);
 
     info!("Embassy initialized!");
     info!(
@@ -43,16 +42,17 @@ async fn main(spawner: Spawner) -> ! {
         config::HEARTBEAT_S,
         config::MIN_INTERVAL_S
     );
-    info!(
-        "lora pins: sck {}, mosi {}, miso {}, cs {}, rst {}, irq {}, busy {}",
-        config::LORA_SCK,
-        config::LORA_MOSI,
-        config::LORA_MISO,
-        config::LORA_CS,
-        config::LORA_RST,
-        config::LORA_IRQ,
-        config::LORA_BUSY
-    );
+
+    let _radio = match radio::Radio::new(board.radio).await {
+        Ok(radio) => {
+            info!("radio ready");
+            Some(radio)
+        }
+        Err(e) => {
+            error!("radio didn't start: {}", e);
+            None
+        }
+    };
 
     // TODO: Spawn some tasks
     let _ = spawner;

@@ -82,7 +82,11 @@ fn check() -> Result<(), String> {
 
     println!("boards.toml: {} boards", boards.len());
     for (name, board) in &boards {
-        println!("  {name}: {:?}, {:?}", board.chip, board.radio);
+        print!("  {name}: {:?}, {:?}", board.chip, board.radio);
+        if let Some(mv) = board.tcxo_mv {
+            print!(", TCXO {mv} mV");
+        }
+        println!();
         print!("    lora:");
         for (pin, gpio) in board.lora.pins() {
             print!(" {pin}={gpio}");

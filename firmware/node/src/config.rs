@@ -7,6 +7,14 @@ const fn parse_u8(s: &str) -> u8 {
     }
 }
 
+#[cfg(feature = "sx126x")]
+const fn parse_u16(s: &str) -> u16 {
+    match u16::from_str_radix(s, 10) {
+        Ok(v) => v,
+        Err(_) => panic!("expected a number from 0 to 65535"),
+    }
+}
+
 const fn parse_u32(s: &str) -> u32 {
     match u32::from_str_radix(s, 10) {
         Ok(v) => v,
@@ -33,5 +41,13 @@ pub const LORA_IRQ: Option<u8> = match option_env!("AIO_PIN_LORA_IRQ") {
 /// Only SX126x radios have a BUSY pin.
 pub const LORA_BUSY: Option<u8> = match option_env!("AIO_PIN_LORA_BUSY") {
     Some(s) => Some(parse_u8(s)),
+    None => None,
+};
+
+/// SX126x only: the voltage in mV that the radio feeds its TCXO.
+/// `None` when the board has no TCXO.
+#[cfg(feature = "sx126x")]
+pub const TCXO_MV: Option<u16> = match option_env!("AIO_TCXO_MV") {
+    Some(s) => Some(parse_u16(s)),
     None => None,
 };
