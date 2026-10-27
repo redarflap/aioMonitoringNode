@@ -1,6 +1,7 @@
 //! Build tool for this repo. Run it with `cargo xtask <command>`.
 
 mod config;
+mod validate;
 
 use std::process::ExitCode;
 
@@ -8,7 +9,7 @@ const HELP: &str = "\
 Usage: cargo xtask <command>
 
 Commands:
-  check   load boards.toml and nodes.toml and print them
+  check   load boards.toml and nodes.toml, print them and validate them
   help    show this help
 ";
 
@@ -40,7 +41,7 @@ fn main() -> ExitCode {
     }
 }
 
-/// Loads the config files and prints what it found.
+/// Loads the config files, prints what it found and validates it.
 fn check() -> Result<(), String> {
     let boards = config::load_boards()?;
     let nodes = config::load_nodes()?;
@@ -67,5 +68,6 @@ fn check() -> Result<(), String> {
             node.board, node.node_id, node.power, node.heartbeat, node.min_interval
         );
     }
-    Ok(())
+
+    validate::run(&boards, &nodes)
 }

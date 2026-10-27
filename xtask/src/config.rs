@@ -21,6 +21,18 @@ pub struct Board {
     pub lora: LoraPins,
 }
 
+impl Board {
+    /// Every pin of the board, as (name, GPIO number), for example ("lora.sck", 6).
+    /// Add new pin groups (1-Wire, UART, ...) here, so the pin rules check them too.
+    pub fn pins(&self) -> Vec<(String, u8)> {
+        let mut pins = Vec::new();
+        for (name, gpio) in self.lora.pins() {
+            pins.push((format!("lora.{name}"), gpio));
+        }
+        pins
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Chip {
