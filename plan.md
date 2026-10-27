@@ -459,7 +459,7 @@ Compare `hello-s3/src` with `hello-c6/src`. Where the start-up code differs, put
 
 Commit: `Run on the S3`
 
-**Status (2026-10-27):** `hello-s3/src` and `hello-c6/src` are the same, so `main.rs` needs no `#[cfg]`. The only start-up difference was the `-Wl,` linker option in `build.rs`, which step 5.1 already needed. `espflash save-image --chip esp32s3` accepts the dev-s3 ELF, and the dev-c6 ELF is byte-for-byte the same as before Phase 5. **Still open:** the check on a real S3 board.
+**Status (2026-10-27):** `hello-s3/src` and `hello-c6/src` are the same, so `main.rs` needs no `#[cfg]`. The only start-up difference was the `-Wl,` linker option in `build.rs`, which step 5.1 already needed. `espflash save-image --chip esp32s3` accepts the dev-s3 ELF, and the dev-c6 flash image has the same code bytes as before Phase 5. `cargo xtask run dev-s3` works on a real S3 board.
 
 ---
 
