@@ -4,22 +4,39 @@ version = "0.1.0"
 edition.workspace = true
 rust-version = "1.95"
 
-[dependencies]
-esp-hal = { workspace = true, features = ["defmt", "esp32c6", "unstable"] }
+# The chip is picked with a feature, so the same crate builds for both chips.
+# The xtask turns the board's `chip` into one of these.
+[features]
+esp32c6 = [
+  "esp-backtrace/esp32c6",
+  "esp-bootloader-esp-idf/esp32c6",
+  "esp-hal/esp32c6",
+  "esp-println/esp32c6",
+  "esp-rtos/esp32c6",
+]
+esp32s3 = [
+  "esp-backtrace/esp32s3",
+  "esp-bootloader-esp-idf/esp32s3",
+  "esp-hal/esp32s3",
+  "esp-println/esp32s3",
+  "esp-rtos/esp32s3",
+]
 
-esp-rtos = { workspace = true, features = ["defmt", "embassy", "esp32c6"] }
+[dependencies]
+esp-hal = { workspace = true, features = ["defmt", "unstable"] }
+
+esp-rtos = { workspace = true, features = ["defmt", "embassy"] }
 
 defmt = { workspace = true }
-esp-bootloader-esp-idf = { workspace = true, features = ["defmt", "esp32c6"] }
+esp-bootloader-esp-idf = { workspace = true, features = ["defmt"] }
 
 embassy-executor = { workspace = true, features = ["defmt"] }
 embassy-time = { workspace = true, features = ["defmt"] }
 esp-backtrace = { workspace = true, features = [
   "defmt",
-  "esp32c6",
   "panic-handler",
 ] }
-esp-println = { workspace = true, features = ["defmt-espflash", "esp32c6"] }
+esp-println = { workspace = true, features = ["defmt-espflash"] }
 
 critical-section = { workspace = true }
 static_cell = { workspace = true }
