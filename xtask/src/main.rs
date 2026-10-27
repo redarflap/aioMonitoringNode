@@ -11,6 +11,7 @@ Usage: cargo xtask <command>
 
 Commands:
   build <node>                 validate, then build the firmware of a node from nodes.toml
+  build --all                  validate, then build the firmware of every node (CI does this)
   clippy <node>                validate, then run clippy on the firmware of a node
   run <node> [--port COM5]     build, flash and show the log
   monitor <node> [--port COM5] show the log of a node that is already flashed
@@ -27,6 +28,8 @@ fn main() -> ExitCode {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
 
     let result = match args.as_slice() {
+        // Before `["build", node]`, which would take `--all` for a node name.
+        ["build", "--all"] => firmware::build_all(),
         ["build", node] => firmware::build(node).map(|elf| println!("ELF: {}", elf.display())),
         ["clippy", node] => firmware::clippy(node),
         ["run", node, options @ ..] => {

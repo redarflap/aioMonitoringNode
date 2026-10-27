@@ -27,6 +27,19 @@ pub fn build(node_name: &str) -> Result<PathBuf, String> {
     Ok(firmware.elf())
 }
 
+/// Builds the firmware of every node in `nodes.toml`, one after the other, and
+/// stops at the first one that fails. Nodes on the same chip share one ELF path,
+/// so each build overwrites the ELF of the one before.
+pub fn build_all() -> Result<(), String> {
+    let nodes = config::load_nodes()?;
+    for node_name in nodes.nodes.keys() {
+        println!("== {node_name}");
+        build(node_name).map_err(|e| format!("{node_name}: {e}"))?;
+    }
+    println!("built {} nodes", nodes.nodes.len());
+    Ok(())
+}
+
 /// Runs clippy on the node's firmware.
 pub fn clippy(node_name: &str) -> Result<(), String> {
     resolve(node_name)?.cargo("clippy")

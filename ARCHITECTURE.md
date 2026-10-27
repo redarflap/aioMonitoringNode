@@ -171,6 +171,7 @@ cargo fmt
 
 # firmware (<node> = entry name in nodes.toml)
 cargo xtask build   <node>
+cargo xtask build   --all                      # every node in nodes.toml, like CI
 cargo xtask run     <node> [--port COM5]       # build + flash + monitor
 cargo xtask monitor <node> [--port COM5]       # reattach monitor (needs the ELF for defmt)
 cargo xtask clippy  <node>
@@ -179,6 +180,8 @@ cargo xtask clippy  <node>
 cargo xtask schemas                            # regenerate schemas.json from crates/proto
 cargo xtask schemas --publish                  # ... and publish it retained to MQTT (needs AIO_MQTT_URL)
 ```
+
+CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every pull request, in two jobs. **host** runs `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, and a RISC-V build of the `no_std` libraries. **firmware** runs `cargo xtask check` and `cargo xtask build --all`; it installs the `esp` toolchain for the S3 nodes.
 
 Logging uses `defmt` through `esp-println`, with espflash decoding it via `--log-format defmt`. Panics go through `esp-backtrace`.
 
