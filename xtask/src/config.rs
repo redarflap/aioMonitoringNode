@@ -109,6 +109,10 @@ pub struct Node {
     pub heartbeat: u32,
     /// Fewest seconds between two packets.
     pub min_interval: u32,
+    /// The sources the node runs, from `sources.<name> = { ... }`.
+    /// A node without sources leaves them out.
+    #[serde(default)]
+    pub sources: BTreeMap<Source, SourceParams>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -117,6 +121,22 @@ pub enum Power {
     AlwaysOn,
     DeepSleep,
 }
+
+/// One thing a node reads. A name that isn't listed here is an error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Source {
+    Ds18b20,
+    Battery,
+    Eder,
+    Pyromat,
+}
+
+/// The parameters of a source. No source takes any yet, so `{}` is the only
+/// valid value. Each source gets its own parameters when it gets ported.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceParams {}
 
 /// Reads `boards.toml`. Returns board name -> board, sorted by name.
 pub fn load_boards() -> Result<BTreeMap<String, Board>, String> {
@@ -143,4 +163,46 @@ pub fn repo_root() -> PathBuf {
         .parent()
         .expect("xtask/ is inside the repo")
         .to_path_buf()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Parses one node entry: the lines below a `[nodes.<name>]` header.
+    fn node(text: &str) -> Result<Node, toml::de::Error> {
+        let common = r#"
+            board = "c6-dev"
+            node_id = 100
+            power = "always-on"
+            heartbeat = 60
+            min_interval = 10
+        "#;
+        toml::from_str(&format!("{common}\n{text}"))
+    }
+
+    #[test]
+    fn sources_are_optional() {
+        assert!(node("").unwrap().sources.is_empty());
+    }
+
+    #[test]
+    fn known_source() {
+        let node = node("sources.battery = {}").unwrap();
+        assert_eq!(node.sources.keys().collect::<Vec<_>>(), [&Source::Battery]);
+    }
+
+    #[test]
+    fn unknown_source_is_an_error() {
+        let error = node("sources.foo = {}").unwrap_err().to_string();
+        assert!(error.contains("unknown variant `foo`"), "{error}");
+    }
+
+    #[test]
+    fn unknown_parameter_is_an_error() {
+        let error = node("sources.battery = { foo = 1 }")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown field `foo`"), "{error}");
+    }
 }

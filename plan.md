@@ -536,6 +536,8 @@ Commit: `Move sending into the report task`
 
 Commit: `Select sources from nodes.toml`
 
+**Status (2026-10-27):** the xtask also rejects parameters that a source doesn't take; so far no source takes any. With all four sources on, `cargo xtask clippy` passes on both chips. On the dev-c6 board, the log shows `battery: not ported yet` and the message goes away without the line.
+
 ---
 
 ## Phase 8: Editor, CI and docs

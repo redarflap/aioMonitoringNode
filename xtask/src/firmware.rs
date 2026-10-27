@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::config::{self, Board, Chip, Node, Radio};
+use crate::config::{self, Board, Chip, Node, Radio, Source};
 use crate::validate;
 
 /// What cargo needs to know to build the firmware of one node.
@@ -13,6 +13,8 @@ struct Firmware {
     chip: Chip,
     /// The radio chip of the node's board.
     radio: Radio,
+    /// The node's sources.
+    sources: Vec<Source>,
     /// `AIO_*` env vars with the node's values and its board's pins and settings.
     /// The firmware reads them with `env!`.
     env: BTreeMap<String, String>,
@@ -76,6 +78,7 @@ fn resolve(node_name: &str) -> Result<Firmware, String> {
     Ok(Firmware {
         chip: board.chip,
         radio: board.radio,
+        sources: node.sources.keys().copied().collect(),
         env,
     })
 }
@@ -121,11 +124,17 @@ impl Firmware {
             self.chip
                 .cargo(subcommand)
                 .args(["--release", "--target", self.chip.target()])
-                .args(["--features", self.chip.feature()])
-                .args(["--features", self.radio.feature()])
+                .args(["--features", &self.features().join(",")])
                 .envs(&self.env)
                 .current_dir(config::repo_root().join("firmware").join("node")),
         )
+    }
+
+    /// The cargo features that pick the chip, the radio and the sources.
+    fn features(&self) -> Vec<&'static str> {
+        let mut features = vec![self.chip.feature(), self.radio.feature()];
+        features.extend(self.sources.iter().map(Source::feature));
+        features
     }
 
     /// The file that `cargo build` writes. All crates of the workspace share the
@@ -209,6 +218,18 @@ impl Radio {
     }
 }
 
+impl Source {
+    /// The cargo feature that turns this source on in `firmware/node`.
+    fn feature(&self) -> &'static str {
+        match self {
+            Source::Ds18b20 => "source-ds18b20",
+            Source::Battery => "source-battery",
+            Source::Eder => "source-eder",
+            Source::Pyromat => "source-pyromat",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,5 +265,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!(board_env(&board)["AIO_TCXO_MV"], "1800");
+    }
+
+    #[test]
+    fn sources_become_features() {
+        let firmware = Firmware {
+            chip: Chip::Esp32c6,
+            radio: Radio::Sx127x,
+            sources: vec![Source::Battery, Source::Eder],
+            env: BTreeMap::new(),
+        };
+        assert_eq!(
+            firmware.features(),
+            ["esp32c6", "sx127x", "source-battery", "source-eder"]
+        );
     }
 }

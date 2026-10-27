@@ -24,6 +24,11 @@ esp32s3 = [
 # The radio chip is picked the same way, from the board's `radio`.
 sx126x = []
 sx127x = []
+# One feature per source. The xtask turns the node's `sources` into these.
+source-battery = []
+source-ds18b20 = []
+source-eder = []
+source-pyromat = []
 
 [dependencies]
 esp-hal = { workspace = true, features = ["defmt", "unstable"] }

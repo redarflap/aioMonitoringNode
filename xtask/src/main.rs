@@ -105,6 +105,8 @@ fn check() -> Result<(), String> {
             "  {name}: board {}, node_id {}, {:?}, heartbeat {} s, min_interval {} s",
             node.board, node.node_id, node.power, node.heartbeat, node.min_interval
         );
+        let sources: Vec<_> = node.sources.keys().collect();
+        println!("    sources: {sources:?}");
     }
 
     validate::run(&boards, &nodes)
