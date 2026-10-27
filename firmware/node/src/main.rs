@@ -43,7 +43,7 @@ async fn main(spawner: Spawner) -> ! {
         config::MIN_INTERVAL_S
     );
 
-    let _radio = match radio::Radio::new(board.radio).await {
+    let mut radio = match radio::Radio::new(board.radio).await {
         Ok(radio) => {
             info!("radio ready");
             Some(radio)
@@ -57,9 +57,16 @@ async fn main(spawner: Spawner) -> ! {
     // TODO: Spawn some tasks
     let _ = spawner;
 
+    // Test bytes, until crates/proto defines the real packet.
+    let packet = [config::NODE_ID, 0xAA, 0x55];
     loop {
-        info!("Hello world!");
-        Timer::after(Duration::from_secs(1)).await;
+        if let Some(radio) = &mut radio {
+            match radio.send(&packet).await {
+                Ok(()) => info!("sent {=[u8]:02x}", packet),
+                Err(e) => error!("send failed: {}", e),
+            }
+        }
+        Timer::after(Duration::from_secs(config::HEARTBEAT_S.into())).await;
     }
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.2.2/examples

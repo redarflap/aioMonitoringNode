@@ -45,12 +45,16 @@ const PREAMBLE_SYMBOLS: u16 = 8;
 /// A private network uses the sync word 0x12 on SX127x, which is 0x1424 on SX126x.
 const PUBLIC_NETWORK: bool = false;
 /// 14 dBm stays within the 25 mW ERP that 868.0–868.6 MHz allows.
-#[expect(dead_code, reason = "`send` uses it from step 6.2 on")]
 const TX_POWER_DBM: i32 = 14;
 
 /// A working radio starts well within this time. Without a limit, a radio that
 /// doesn't answer could keep start-up waiting forever.
 const START_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// The longest packet (255 bytes) is on air for about 0.4 s, so a send that
+/// takes longer has gone wrong. Without a limit, a radio that never reports
+/// "sent" would keep the node waiting forever.
+const SEND_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The SPI bus together with the radio's CS pin.
 pub type RadioSpi = ExclusiveDevice<Spi<'static, Async>, Output<'static>, Delay>;
@@ -64,14 +68,16 @@ pub struct Hardware {
     pub pins: Pins,
 }
 
-/// Why the radio didn't start.
+/// Why the radio didn't start or didn't send.
 #[derive(defmt::Format)]
 pub enum Error {
     /// lora-phy reported an error.
     Driver(RadioError),
-    /// The radio wasn't ready after 2 s. On SX126x, a wrong BUSY pin does that.
+    /// The radio took longer than 2 s. At start-up on SX126x, a wrong BUSY pin
+    /// does that. When sending, the radio never reported "sent".
     Timeout,
-    /// The radio didn't read back the sync word. Usually a wrong SPI or CS pin.
+    /// At start-up, the radio didn't read back the sync word. Usually a wrong
+    /// SPI or CS pin.
     NoAnswer,
 }
 
@@ -82,7 +88,6 @@ impl From<RadioError> for Error {
 }
 
 /// The LoRa radio, started and set up.
-#[expect(dead_code, reason = "`send` reads the fields from step 6.2 on")]
 pub struct Radio {
     lora: LoRa<family::Kind, Delay>,
     modulation: ModulationParams,
@@ -132,6 +137,30 @@ impl Radio {
             modulation,
             tx_params,
         })
+    }
+
+    /// Sends one packet of at most 255 bytes, and returns once the radio
+    /// reports it as sent.
+    #[allow(
+        clippy::large_stack_frames,
+        reason = "lora-phy's send code is large; it runs on the main stack, \
+        which gets all the RAM that is left over"
+    )]
+    pub async fn send(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        // The timeout covers the preparation, too: on SX126x it waits for BUSY.
+        match with_timeout(SEND_TIMEOUT, self.transmit(bytes)).await {
+            Ok(result) => result,
+            Err(_) => Err(Error::Timeout),
+        }
+    }
+
+    #[allow(clippy::large_stack_frames, reason = "see `send`")]
+    async fn transmit(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        self.lora
+            .prepare_for_tx(&self.modulation, &mut self.tx_params, TX_POWER_DBM, bytes)
+            .await?;
+        self.lora.tx().await?;
+        Ok(())
     }
 }
 

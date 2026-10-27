@@ -508,6 +508,8 @@ The xtask already keeps `node_id` out of `reserved_node_ids`, so the legacy Node
 
 Commit: `Send a LoRa test packet`
 
+**Status (2026-10-27):** the 2 s timeout covers the whole send, not only the wait for "sent", because on SX126x preparing a send also waits on BUSY.
+
 ---
 
 ## Phase 7: Tasks
