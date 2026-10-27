@@ -522,6 +522,8 @@ Move the sending into `src/report.rs`, as an Embassy task (`#[embassy_executor::
 
 Commit: `Move sending into the report task`
 
+**Status (2026-10-27):** the report task also starts the radio, so `main` doesn't have to wait for it. If the radio doesn't start, the task logs the error and ends. On the dev-c6 board, the log shows `radio ready` from `report.rs` and then `sent [64, aa, 55]` every 60 s.
+
 ### 7.2 Sources from `nodes.toml`
 
 1. firmware: add one feature per source: `source-ds18b20`, `source-battery`, `source-eder`, `source-pyromat`.

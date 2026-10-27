@@ -10,10 +10,10 @@
 mod board;
 mod config;
 mod radio;
+mod report;
 
-use defmt::{error, info};
+use defmt::info;
 use embassy_executor::Spawner;
-use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_println as _;
@@ -22,12 +22,9 @@ use esp_println as _;
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
 
-#[allow(
-    clippy::large_stack_frames,
-    reason = "it's not unusual to allocate larger buffers etc. in main"
-)]
+/// Starts the board and the tasks, then returns. The tasks keep running.
 #[esp_rtos::main]
-async fn main(spawner: Spawner) -> ! {
+async fn main(spawner: Spawner) {
     // generator version: 1.4.0
     // generator parameters: -o esp32c6 -o unstable-hal -o embassy -o defmt -o esp-backtrace (-o esp32s3 generates the same code)
 
@@ -43,31 +40,8 @@ async fn main(spawner: Spawner) -> ! {
         config::MIN_INTERVAL_S
     );
 
-    let mut radio = match radio::Radio::new(board.radio).await {
-        Ok(radio) => {
-            info!("radio ready");
-            Some(radio)
-        }
-        Err(e) => {
-            error!("radio didn't start: {}", e);
-            None
-        }
-    };
-
-    // TODO: Spawn some tasks
-    let _ = spawner;
-
-    // Test bytes, until crates/proto defines the real packet.
-    let packet = [config::NODE_ID, 0xAA, 0x55];
-    loop {
-        if let Some(radio) = &mut radio {
-            match radio.send(&packet).await {
-                Ok(()) => info!("sent {=[u8]:02x}", packet),
-                Err(e) => error!("send failed: {}", e),
-            }
-        }
-        Timer::after(Duration::from_secs(config::HEARTBEAT_S.into())).await;
-    }
+    // Each task can run only once, so spawning fails only if this runs twice.
+    spawner.spawn(report::task(board.radio).unwrap());
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.2.2/examples
 }
