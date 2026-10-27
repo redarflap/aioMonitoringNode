@@ -7,6 +7,8 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
+mod config;
+
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
@@ -35,6 +37,12 @@ async fn main(spawner: Spawner) -> ! {
     esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
     info!("Embassy initialized!");
+    info!(
+        "node_id {}, heartbeat {} s, min_interval {} s",
+        config::NODE_ID,
+        config::HEARTBEAT_S,
+        config::MIN_INTERVAL_S
+    );
 
     // TODO: Spawn some tasks
     let _ = spawner;

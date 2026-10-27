@@ -1,9 +1,10 @@
 //! Builds the firmware of one node from `nodes.toml`.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::config::{self, Chip};
+use crate::config::{self, Chip, Node};
 use crate::validate;
 
 /// What cargo needs to know to build the firmware of one node.
@@ -12,6 +13,8 @@ struct Firmware {
     target: &'static str,
     /// The cargo feature that picks the chip in `firmware/node`.
     chip_feature: &'static str,
+    /// `AIO_*` env vars with the node's values. The firmware reads them with `env!`.
+    env: BTreeMap<&'static str, String>,
 }
 
 /// Builds the node's firmware and returns the path of its ELF file.
@@ -70,18 +73,30 @@ fn resolve(node_name: &str) -> Result<Firmware, String> {
     Ok(Firmware {
         target: board.chip.target()?,
         chip_feature: board.chip.feature(),
+        env: node_env(node),
     })
+}
+
+/// The node's values from `nodes.toml`, as env vars for `firmware/node/src/config.rs`.
+fn node_env(node: &Node) -> BTreeMap<&'static str, String> {
+    BTreeMap::from([
+        ("AIO_NODE_ID", node.node_id.to_string()),
+        ("AIO_HEARTBEAT", node.heartbeat.to_string()),
+        ("AIO_MIN_INTERVAL", node.min_interval.to_string()),
+    ])
 }
 
 impl Firmware {
     /// Runs `cargo <subcommand>` inside `firmware/node`, so cargo also reads
-    /// `firmware/node/.cargo/config.toml`.
+    /// `firmware/node/.cargo/config.toml`. Cargo rebuilds by itself when an
+    /// `AIO_*` value changes.
     fn cargo(&self, subcommand: &str) -> Result<(), String> {
         wait(
             &format!("cargo {subcommand}"),
             Command::new("cargo")
                 .args([subcommand, "--release", "--target", self.target])
                 .args(["--features", self.chip_feature])
+                .envs(&self.env)
                 .current_dir(config::repo_root().join("firmware").join("node")),
         )
     }
