@@ -1,0 +1,39 @@
+{
+  "kinds": {
+    "4": {
+      "source": "battery",
+      "fields": [
+        {
+          "key": "voltage",
+          "type": "u8",
+          "divisor": 50,
+          "unit": "V",
+          "device_class": "voltage",
+          "state_class": "measurement"
+        }
+      ]
+    }
+  },
+  "nodes": {
+    "100": {
+      "name": "dev-c6",
+      "heartbeat": 60,
+      "sources": [
+        "battery"
+      ]
+    },
+    "101": {
+      "name": "dev-s3",
+      "heartbeat": 60,
+      "sources": [
+        "battery"
+      ]
+    }
+  },
+  "reserved_node_ids": [
+    0,
+    1,
+    2,
+    124
+  ]
+}

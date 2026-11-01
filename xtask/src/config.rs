@@ -150,6 +150,14 @@ pub enum Source {
 }
 
 impl Source {
+    /// Every source, in the order `nodes.toml` sorts them.
+    pub const ALL: [Source; 4] = [
+        Source::Ds18b20,
+        Source::Battery,
+        Source::Eder,
+        Source::Pyromat,
+    ];
+
     /// The source's name in `nodes.toml`.
     pub fn name(&self) -> &'static str {
         match self {
@@ -157,6 +165,15 @@ impl Source {
             Source::Battery => "battery",
             Source::Eder => "eder",
             Source::Pyromat => "pyromat",
+        }
+    }
+
+    /// The kind number of the source's section. `None` while the source isn't
+    /// ported yet.
+    pub fn kind(&self) -> Option<u8> {
+        match self {
+            Source::Battery => Some(proto::Battery::KIND),
+            Source::Ds18b20 | Source::Eder | Source::Pyromat => None,
         }
     }
 

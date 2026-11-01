@@ -24,6 +24,10 @@ jobs:
       # Proves the libraries really are no_std: host tests can pass even when a
       # dependency secretly needs std.
       - run: cargo build --target riscv32imac-unknown-none-elf -p proto -p policy -p onewire -p lp-shared -p eder -p pyromat
+      # schemas.json is generated: fails if a change to nodes.toml or
+      # crates/proto was committed without running `cargo xtask schemas`.
+      - run: cargo xtask schemas
+      - run: git diff --exit-code schemas.json
 
   # The firmware of every node in nodes.toml.
   firmware:

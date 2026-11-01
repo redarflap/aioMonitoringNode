@@ -2,6 +2,7 @@
 
 mod config;
 mod firmware;
+mod schemas;
 mod validate;
 
 use std::process::ExitCode;
@@ -16,6 +17,7 @@ Commands:
   run <node> [--port COM5]     build, flash and show the log
   monitor <node> [--port COM5] show the log of a node that is already flashed
   check                        load boards.toml and nodes.toml, print them and validate them
+  schemas                      validate, then write schemas.json for the decoder
   help                         show this help
 
 Without --port, espflash looks for the board itself.
@@ -39,6 +41,7 @@ fn main() -> ExitCode {
             port_option(options).and_then(|port| firmware::monitor(node, port))
         }
         ["check"] => check(),
+        ["schemas"] => schemas::write().map(|path| println!("wrote {}", path.display())),
         ["help" | "-h" | "--help"] => {
             print!("{HELP}");
             return ExitCode::SUCCESS;
