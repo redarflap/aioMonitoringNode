@@ -1332,6 +1332,7 @@ dependencies = [
  "esp-println",
  "esp-rtos",
  "lora-phy",
+ "proto",
  "static_cell",
 ]
 

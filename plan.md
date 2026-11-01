@@ -60,10 +60,13 @@ New rules in `validate.rs`, each with a test:
 
 ### 1.6 Battery task
 
-- Every `heartbeat`: average 8 readings, multiply by the divider, convert with `Battery::from_millivolts`, and log the battery mV. The interval stays `heartbeat` until step 2 brings the send policy.
+- `firmware/node` depends on `crates/proto`.
+- Every `heartbeat`: average 8 readings, multiply by the divider, convert with `Battery::from_millivolts`, and log the battery mV and the pin mV. The interval stays `heartbeat` until step 2 brings the send policy.
 - Store the result in `pub static LATEST: Mutex<CriticalSectionRawMutex, Cell<Battery>>` (starts as `NOT_MEASURED`), then signal `report::NEW_DATA` (an embassy-sync `Signal`).
 
 **Check:** on dev-c6, the logged battery mV is within about 50 mV of a multimeter at the battery. If it's further off, fix `divider` in `boards.toml`. **Commit:** "Sample the battery"
+
+Built and committed without a board: the multimeter check is still open.
 
 ### 1.7 Real packets (report task)
 

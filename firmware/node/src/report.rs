@@ -4,9 +4,15 @@
 //! applies the send policy and sends the real packet.
 
 use defmt::{error, info};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
 
 use crate::{config, radio};
+
+/// A source signals this after it stores a new snapshot, to wake the report
+/// task.
+pub static NEW_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 /// Starts the radio, then sends a packet every `HEARTBEAT_S` seconds.
 /// Ends if the radio doesn't start, because then there is nothing to do.

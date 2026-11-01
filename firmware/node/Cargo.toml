@@ -55,3 +55,6 @@ embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-hal-bus = { workspace = true, features = ["async"] }
 lora-phy = { workspace = true }
+
+# The packet format: the sources store their data as its sections.
+proto = { path = "../../crates/proto" }
