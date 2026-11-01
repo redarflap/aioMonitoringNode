@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
+use proto::Field;
+
 use crate::config::{self, Board, Chip, Node, Radio, Source};
 use crate::validate;
 
@@ -97,15 +99,42 @@ fn resolve(node_name: &str) -> Result<Firmware, String> {
 }
 
 /// The node's values from `nodes.toml`, as env vars for `firmware/node/src/config.rs`.
+/// Each source with fields gets `AIO_THRESHOLDS_<SOURCE>`, for example
+/// `AIO_THRESHOLDS_BATTERY=-`.
 fn node_env(node: &Node) -> BTreeMap<String, String> {
-    [
+    let mut env: BTreeMap<String, String> = [
         ("AIO_NODE_ID", node.node_id.to_string()),
         ("AIO_HEARTBEAT", node.heartbeat.to_string()),
         ("AIO_MIN_INTERVAL", node.min_interval.to_string()),
     ]
     .into_iter()
     .map(|(var, value)| (var.to_string(), value))
-    .collect()
+    .collect();
+    for (source, params) in &node.sources {
+        let fields = source.fields();
+        // Sources that aren't ported yet have no fields, so nothing to export.
+        if !fields.is_empty() {
+            let var = format!("AIO_THRESHOLDS_{}", source.name().to_uppercase());
+            env.insert(var, thresholds(fields, &params.thresholds));
+        }
+    }
+    env
+}
+
+/// One threshold per field in `fields` order, comma-separated: the override
+/// from `nodes.toml` if there is one, else the field's default. `-` for none.
+/// For example `5,-,0`.
+fn thresholds(fields: &[Field], overrides: &BTreeMap<String, u32>) -> String {
+    let list: Vec<String> = fields
+        .iter()
+        .map(
+            |field| match overrides.get(field.key).copied().or(field.threshold) {
+                Some(threshold) => threshold.to_string(),
+                None => "-".to_string(),
+            },
+        )
+        .collect();
+    list.join(",")
 }
 
 /// The board's pins and settings from `boards.toml`, as env vars for
@@ -289,6 +318,66 @@ mod tests {
         )
         .unwrap();
         assert_eq!(board_env(&board)["AIO_TCXO_MV"], "1800");
+    }
+
+    /// A node on board c6-dev with the given `sources.<name> = { ... }` lines.
+    fn node(sources: &str) -> Node {
+        toml::from_str(&format!(
+            r#"
+            board = "c6-dev"
+            node_id = 100
+            power = "always-on"
+            heartbeat = 60
+            min_interval = 10
+            {sources}
+            "#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn thresholds_become_env_vars() {
+        let env = node_env(&node(
+            "sources.battery = {}
+sources.eder = {}",
+        ));
+        // The battery's one field, voltage, has no default threshold.
+        assert_eq!(env["AIO_THRESHOLDS_BATTERY"], "-");
+        // eder isn't ported yet, so it has no fields to export.
+        assert!(!env.contains_key("AIO_THRESHOLDS_EDER"));
+    }
+
+    #[test]
+    fn threshold_override_becomes_env_var() {
+        let env = node_env(&node("sources.battery = { thresholds = { voltage = 2 } }"));
+        assert_eq!(env["AIO_THRESHOLDS_BATTERY"], "2");
+    }
+
+    #[test]
+    fn thresholds_keep_field_order() {
+        let fields = [
+            Field {
+                key: "a",
+                threshold: Some(5),
+            },
+            Field {
+                key: "b",
+                threshold: None,
+            },
+            Field {
+                key: "c",
+                threshold: Some(0),
+            },
+            Field {
+                key: "d",
+                threshold: Some(7),
+            },
+        ];
+        assert_eq!(thresholds(&fields, &BTreeMap::new()), "5,-,0,7");
+
+        // Overrides replace a number or a "none"; the order stays the same.
+        let overrides = BTreeMap::from([("d".to_string(), 1), ("b".to_string(), 3)]);
+        assert_eq!(thresholds(&fields, &overrides), "5,3,0,1");
     }
 
     #[test]

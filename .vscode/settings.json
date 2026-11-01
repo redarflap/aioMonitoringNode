@@ -18,6 +18,7 @@
     "AIO_NODE_ID": "100",
     "AIO_HEARTBEAT": "60",
     "AIO_MIN_INTERVAL": "10",
+    "AIO_THRESHOLDS_BATTERY": "-",
     "AIO_PIN_LORA_SCK": "20",
     "AIO_PIN_LORA_MOSI": "19",
     "AIO_PIN_LORA_MISO": "18",

@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use proto::{Field, Section};
 use serde::Deserialize;
 
 /// The whole `boards.toml` file.
@@ -122,7 +123,7 @@ pub struct Node {
     pub power: Power,
     /// Seconds between packets when nothing changes.
     pub heartbeat: u32,
-    /// Fewest seconds between two packets.
+    /// Fewest seconds between two packets. At least 1, at most `heartbeat`.
     pub min_interval: u32,
     /// The sources the node runs, from `sources.<name> = { ... }`.
     /// A node needs at least one, but leaving them out still parses, so that
@@ -148,11 +149,39 @@ pub enum Source {
     Pyromat,
 }
 
-/// The parameters of a source. No source takes any yet, so `{}` is the only
-/// valid value. Each source gets its own parameters when it gets ported.
+impl Source {
+    /// The source's name in `nodes.toml`.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Source::Ds18b20 => "ds18b20",
+            Source::Battery => "battery",
+            Source::Eder => "eder",
+            Source::Pyromat => "pyromat",
+        }
+    }
+
+    /// The fields of the source's section, in wire order, with their default
+    /// thresholds.
+    pub fn fields(&self) -> &'static [Field] {
+        match self {
+            Source::Battery => proto::Battery::FIELDS,
+            // Not ported yet, so they have no section yet.
+            Source::Ds18b20 | Source::Eder | Source::Pyromat => &[],
+        }
+    }
+}
+
+/// The parameters of a source. Each source gets its own parameters when it
+/// gets ported; for now every source only takes `thresholds`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SourceParams {}
+pub struct SourceParams {
+    /// Field key -> threshold in wire units, for example `voltage = 2`.
+    /// Overrides the field's default threshold from `crates/proto`. Fields left
+    /// out keep their default.
+    #[serde(default)]
+    pub thresholds: BTreeMap<String, u32>,
+}
 
 /// Reads `boards.toml`. Returns board name -> board, sorted by name.
 pub fn load_boards() -> Result<BTreeMap<String, Board>, String> {
@@ -212,6 +241,20 @@ mod tests {
     fn unknown_source_is_an_error() {
         let error = node("sources.foo = {}").unwrap_err().to_string();
         assert!(error.contains("unknown variant `foo`"), "{error}");
+    }
+
+    #[test]
+    fn threshold_override() {
+        let node = node("sources.battery = { thresholds = { voltage = 2 } }").unwrap();
+        assert_eq!(node.sources[&Source::Battery].thresholds["voltage"], 2);
+    }
+
+    #[test]
+    fn negative_threshold_is_an_error() {
+        let error = node("sources.battery = { thresholds = { voltage = -1 } }")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("invalid value"), "{error}");
     }
 
     #[test]

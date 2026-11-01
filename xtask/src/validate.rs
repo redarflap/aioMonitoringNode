@@ -18,6 +18,8 @@ pub fn run(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Result<(), St
     errors.extend(no_reserved_node_ids(nodes));
     errors.extend(has_sources(nodes));
     errors.extend(sources_have_pins(boards, nodes));
+    errors.extend(thresholds_are_fields(nodes));
+    errors.extend(intervals_in_order(nodes));
     for (name, board) in boards {
         errors.extend(pins_exist(name, board));
         errors.extend(no_pin_twice(name, board));
@@ -127,6 +129,50 @@ fn sources_have_pins(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Vec
                     node.board
                 ));
             }
+        }
+    }
+    errors
+}
+
+/// Every threshold override names a field of its source.
+fn thresholds_are_fields(nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (name, node) in &nodes.nodes {
+        for (source, params) in &node.sources {
+            let keys: Vec<&str> = source.fields().iter().map(|field| field.key).collect();
+            for key in params.thresholds.keys() {
+                if keys.contains(&key.as_str()) {
+                    continue;
+                }
+                let known = if keys.is_empty() {
+                    "it has no fields yet".to_string()
+                } else {
+                    format!("its fields are: {}", keys.join(", "))
+                };
+                errors.push(format!(
+                    "node `{name}`: source `{}` has no field `{key}`; {known}",
+                    source.name()
+                ));
+            }
+        }
+    }
+    errors
+}
+
+/// `1 <= min_interval <= heartbeat`. With 0 the node could send in a loop,
+/// and the heartbeat sends anyway, whatever `min_interval` says.
+fn intervals_in_order(nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (name, node) in &nodes.nodes {
+        if node.min_interval == 0 {
+            errors.push(format!(
+                "node `{name}`: min_interval = 0, but it must be at least 1 s"
+            ));
+        } else if node.min_interval > node.heartbeat {
+            errors.push(format!(
+                "node `{name}`: min_interval = {} s is longer than heartbeat = {} s",
+                node.min_interval, node.heartbeat
+            ));
         }
     }
     errors
@@ -294,18 +340,6 @@ impl Chip {
     }
 }
 
-impl Source {
-    /// The source's name in `nodes.toml`.
-    fn name(&self) -> &'static str {
-        match self {
-            Source::Ds18b20 => "ds18b20",
-            Source::Battery => "battery",
-            Source::Eder => "eder",
-            Source::Pyromat => "pyromat",
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,6 +461,47 @@ mod tests {
             sources_have_pins(&boards, &nodes),
             [
                 "node `bad`: source `battery` needs `battery` pins, but board `without-battery` has none"
+            ]
+        );
+    }
+
+    #[test]
+    fn thresholds_must_name_a_field() {
+        let nodes = nodes(
+            r#"
+            reserved_node_ids = []
+            nodes.good = { board = "c6-dev", node_id = 100, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = { thresholds = { voltage = 2 } } }
+            nodes.bad = { board = "c6-dev", node_id = 101, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = { thresholds = { foo = 1 } } }
+            nodes.unported = { board = "c6-dev", node_id = 102, power = "always-on", heartbeat = 60, min_interval = 10, sources.eder = { thresholds = { pressure = 5 } } }
+            "#,
+        );
+        assert_eq!(
+            thresholds_are_fields(&nodes),
+            [
+                "node `bad`: source `battery` has no field `foo`; its fields are: voltage",
+                "node `unported`: source `eder` has no field `pressure`; it has no fields yet",
+            ]
+        );
+    }
+
+    #[test]
+    fn min_interval_between_1_and_heartbeat() {
+        let nodes = nodes(
+            r#"
+            reserved_node_ids = []
+            nodes.one = { board = "c6-dev", node_id = 100, power = "always-on", heartbeat = 60, min_interval = 1 }
+            nodes.equal = { board = "c6-dev", node_id = 101, power = "always-on", heartbeat = 60, min_interval = 60 }
+            nodes.zero = { board = "c6-dev", node_id = 102, power = "always-on", heartbeat = 60, min_interval = 0 }
+            nodes.longer = { board = "c6-dev", node_id = 103, power = "always-on", heartbeat = 60, min_interval = 61 }
+            nodes.no-heartbeat = { board = "c6-dev", node_id = 104, power = "always-on", heartbeat = 0, min_interval = 1 }
+            "#,
+        );
+        assert_eq!(
+            intervals_in_order(&nodes),
+            [
+                "node `longer`: min_interval = 61 s is longer than heartbeat = 60 s",
+                "node `no-heartbeat`: min_interval = 1 s is longer than heartbeat = 0 s",
+                "node `zero`: min_interval = 0, but it must be at least 1 s",
             ]
         );
     }
