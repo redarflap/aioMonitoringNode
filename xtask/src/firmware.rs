@@ -7,7 +7,7 @@ use std::process::Command;
 use proto::Field;
 
 use crate::config::{self, Board, Chip, Node, Radio, Source};
-use crate::validate;
+use crate::{mqtt, schemas, validate};
 
 /// What cargo needs to know to build the firmware of one node.
 struct Firmware {
@@ -47,9 +47,19 @@ pub fn clippy(node_name: &str) -> Result<(), String> {
     resolve(node_name)?.cargo("clippy")
 }
 
-/// Builds the node's firmware, flashes it and shows the log.
+/// Builds the node's firmware, publishes `schemas.json`, flashes the firmware
+/// and shows the log.
 pub fn run(node_name: &str, port: Option<&str>) -> Result<(), String> {
     let elf = build(node_name)?;
+    // So the decoder knows the node before its first packet. `build` has
+    // already validated the config. Flashing works without the broker, so a
+    // failure is only a warning.
+    let published = config::load_nodes()
+        .and_then(|nodes| schemas::write(&nodes))
+        .and_then(|text| mqtt::publish_schemas(&text));
+    if let Err(e) = published {
+        eprintln!("warning: schemas.json isn't published: {e}");
+    }
     wait(
         "espflash flash",
         espflash("flash", port).arg("--monitor").arg(&elf),

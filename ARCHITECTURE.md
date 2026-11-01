@@ -95,14 +95,16 @@ cargo fmt
 cargo xtask help
 cargo xtask check                              # validate boards.toml and nodes.toml
 cargo xtask build   <node> | --all
-cargo xtask run     <node> [--port COM5]       # build + flash + monitor
+cargo xtask run     <node> [--port COM5]       # build + publish schemas.json + flash + monitor
 cargo xtask monitor <node> [--port COM5]
 cargo xtask clippy  <node>
 
 # receiver side
 cargo xtask schemas                            # regenerate schemas.json
-cargo xtask schemas --publish                  # (not built yet) and publish it to MQTT
+cargo xtask schemas --publish                  # and publish it to MQTT
 ```
+
+- The broker comes from `AIO_MQTT_URL` = `mqtt://[user:password@]host[:port]` (port 1883 by default, no TLS, no `%` escapes; never commit it). `schemas --publish` publishes retained with QoS 1 to `aio/schemas` and waits up to 5 s for the broker's ack; a missing URL or broker is an error. `run` does the same after building, but there it only warns and still flashes.
 
 - Plain `cargo` runs on the host and covers only `crates/*` and `xtask`. Never use `--workspace`.
 - Build firmware only through the xtask. It sets target, toolchain, features and `AIO_*` vars, and always builds `--release` (unoptimised code breaks 1-Wire timing and the LP size budget).
@@ -172,7 +174,7 @@ Flow: OpenMQTTGateway → MQTT → Node-RED → HA.
   ```
 
   Only ported sources have a kind. Fields without a unit or class leave that key out; thresholds stay out.
-- **Publishing:** `cargo xtask run` publishes `schemas.json` retained on `aio/schemas` before flashing. The broker comes from `AIO_MQTT_URL` (never committed); if it's unreachable, the xtask warns and carries on.
+- **Publishing:** `cargo xtask schemas --publish`, and `cargo xtask run` before flashing, publish `schemas.json` retained on `aio/schemas` (see "Build & commands"), so the decoder always has the current one, also after a restart.
 - **Decoder:** `decoder/` interprets `schemas.json` generically, with no per-kind code. Unknown kind or wrong total length: drop the packet and warn. Kinds that differ from the node's source list: warn, still publish. Each packet becomes one state JSON per node, with sentinels as `null`.
 - **Discovery** (HA ≥ 2024.11), retained, one message per device: `homeassistant/device/aio_<node_id>/config` for a node's default device (its sources not listed in any `[devices.*]`), `homeassistant/device/aio_<key>/config` for declared devices. Each field is a component with its node's state topic and `expire_after` ≈ 2.5 × heartbeat. `unique_id` = `aio_<node_id>_<source>_<field>` or `aio_<node_id>_ds18b20_<sensor_id>`, never the device key, so moving a source keeps its history. Republished on HA `online` and when a new repeated-group key appears. Unknown node IDs with known kinds still get a default device.
 - **Migration:** Node-RED routes packets whose first byte is in `reserved_node_ids` to the legacy flow, all others to this decoder.

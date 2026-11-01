@@ -1,15 +1,14 @@
 //! `schemas.json`: what the decoder needs to know about kinds and nodes.
 //!
-//! `cargo xtask schemas` writes it to the repo root. Never edit it by hand.
+//! `cargo xtask schemas` writes it to the repo root, and with `--publish`
+//! also publishes it to MQTT. Never edit it by hand.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use proto::{Field, Type};
 use serde::Serialize;
 
 use crate::config::{self, NodesFile, Source};
-use crate::validate;
 
 /// The whole `schemas.json`. Maps are sorted by key, so the same config
 /// always gives the same file.
@@ -73,16 +72,13 @@ struct DeviceSource {
     source: &'static str,
 }
 
-/// Validates the config files, then writes `schemas.json`. Returns its path.
-pub fn write() -> Result<PathBuf, String> {
-    let boards = config::load_boards()?;
-    let nodes = config::load_nodes()?;
-    validate::run(&boards, &nodes)?;
-
+/// Writes `schemas.json` and returns its text. Validate `nodes` first.
+pub fn write(nodes: &NodesFile) -> Result<String, String> {
     let path = config::repo_root().join("schemas.json");
-    std::fs::write(&path, render(&nodes))
-        .map_err(|e| format!("can't write {}: {e}", path.display()))?;
-    Ok(path)
+    let text = render(nodes);
+    std::fs::write(&path, &text).map_err(|e| format!("can't write {}: {e}", path.display()))?;
+    println!("wrote {}", path.display());
+    Ok(text)
 }
 
 /// The text of `schemas.json`: pretty JSON with a trailing newline. `nodes`

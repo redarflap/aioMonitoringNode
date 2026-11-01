@@ -2,6 +2,7 @@
 
 mod config;
 mod firmware;
+mod mqtt;
 mod schemas;
 mod validate;
 
@@ -14,13 +15,15 @@ Commands:
   build <node>                 validate, then build the firmware of a node from nodes.toml
   build --all                  validate, then build the firmware of every node (CI does this)
   clippy <node>                validate, then run clippy on the firmware of a node
-  run <node> [--port COM5]     build, flash and show the log
+  run <node> [--port COM5]     build, publish schemas.json (warns if that fails), flash, show the log
   monitor <node> [--port COM5] show the log of a node that is already flashed
   check                        load boards.toml and nodes.toml, print them and validate them
   schemas                      validate, then write schemas.json for the decoder
+  schemas --publish            ... and publish it retained to aio/schemas
   help                         show this help
 
 Without --port, espflash looks for the board itself.
+The MQTT broker comes from AIO_MQTT_URL, for example mqtt://user:pass@192.168.1.10:1883.
 ";
 
 fn main() -> ExitCode {
@@ -41,7 +44,8 @@ fn main() -> ExitCode {
             port_option(options).and_then(|port| firmware::monitor(node, port))
         }
         ["check"] => check(),
-        ["schemas"] => schemas::write().map(|path| println!("wrote {}", path.display())),
+        ["schemas"] => schemas(false),
+        ["schemas", "--publish"] => schemas(true),
         ["help" | "-h" | "--help"] => {
             print!("{HELP}");
             return ExitCode::SUCCESS;
@@ -79,6 +83,19 @@ fn port_option<'a>(options: &[&'a str]) -> Result<Option<&'a str>, String> {
             options.join(" ")
         )),
     }
+}
+
+/// Validates the config files, then writes `schemas.json` and, with
+/// `publish`, publishes it.
+fn schemas(publish: bool) -> Result<(), String> {
+    let boards = config::load_boards()?;
+    let nodes = config::load_nodes()?;
+    validate::run(&boards, &nodes)?;
+    let text = schemas::write(&nodes)?;
+    if publish {
+        mqtt::publish_schemas(&text)?;
+    }
+    Ok(())
 }
 
 /// Loads the config files, prints what it found and validates it.
