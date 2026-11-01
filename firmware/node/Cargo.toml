@@ -58,3 +58,5 @@ lora-phy = { workspace = true }
 
 # The packet format: the sources store their data as its sections.
 proto = { path = "../../crates/proto" }
+# The send policy: when a snapshot is worth a packet.
+policy = { path = "../../crates/policy" }
