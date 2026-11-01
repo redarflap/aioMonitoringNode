@@ -30,6 +30,7 @@
       ]
     }
   },
+  "devices": {},
   "reserved_node_ids": [
     0,
     1,

@@ -62,10 +62,11 @@ No decoder change and no new binary.
 - `1 ≤ min_interval ≤ heartbeat`, both in seconds.
 - `sources.<name> = { thresholds = { <field> = <wire units> } }` overrides default thresholds, for example `sources.battery = { thresholds = { voltage = 2 } }`. Each key must be a field of the source. The xtask exports them as `AIO_THRESHOLDS_<SOURCE>`: one entry per field in `FIELDS` order, comma-separated, defaults with overrides applied, `-` for none (`AIO_THRESHOLDS_BATTERY=-`).
 
+- `[devices.<key>]` with `name` and `sources = ["<node>.<source>", ...]` groups sources into an HA device, even across nodes; none by default. Unlisted sources stay in their node's default device. Each entry must name a node that runs that source, no source may be in two devices (or twice in one), and a device needs at least one source. The key matches `[a-z][a-z0-9_-]*`: it becomes `aio_<key>` in HA, and starting with a letter it can't clash with a node's `aio_<node_id>`.
+
 Planned:
 
 - `sources.<name> = { ... }` also takes the source's parameters (e.g. `max_per_bus`, `poll`), next to `thresholds`.
-- `[devices.<key>]` with `name` and `sources = ["<node>.<source>", ...]` groups sources into an HA device, even across nodes. Unlisted sources stay in their node's default device.
 
 ## Targets
 
@@ -165,6 +166,7 @@ Flow: OpenMQTTGateway → MQTT → Node-RED → HA.
       { "key": "voltage", "type": "u8", "divisor": 50, "unit": "V", "device_class": "voltage", "state_class": "measurement" }
     ] } },
     "nodes": { "100": { "name": "dev-c6", "heartbeat": 60, "sources": ["battery"] } },
+    "devices": { "heating": { "name": "Heating", "sources": [{ "node": 100, "source": "battery" }] } },
     "reserved_node_ids": [0, 1, 2, 124]
   }
   ```

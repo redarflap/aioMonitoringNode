@@ -19,6 +19,8 @@ struct Schemas {
     kinds: BTreeMap<u8, Kind>,
     /// Node ID -> node.
     nodes: BTreeMap<u8, Node>,
+    /// Device key -> HA device from `[devices.*]`.
+    devices: BTreeMap<String, Device>,
     /// First bytes of legacy packets. The decoder hands those packets to the
     /// legacy flow.
     reserved_node_ids: Vec<u8>,
@@ -57,6 +59,20 @@ struct Node {
     sources: Vec<&'static str>,
 }
 
+/// One `[devices.<key>]` entry.
+#[derive(Serialize)]
+struct Device {
+    name: String,
+    sources: Vec<DeviceSource>,
+}
+
+/// One source of a device: `dev-c6.battery` becomes `{ "node": 100, "source": "battery" }`.
+#[derive(Serialize)]
+struct DeviceSource {
+    node: u8,
+    source: &'static str,
+}
+
 /// Validates the config files, then writes `schemas.json`. Returns its path.
 pub fn write() -> Result<PathBuf, String> {
     let boards = config::load_boards()?;
@@ -69,7 +85,8 @@ pub fn write() -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// The text of `schemas.json`: pretty JSON with a trailing newline.
+/// The text of `schemas.json`: pretty JSON with a trailing newline. `nodes`
+/// must be valid.
 fn render(nodes: &NodesFile) -> String {
     let schemas = Schemas {
         kinds: kinds(),
@@ -83,6 +100,29 @@ fn render(nodes: &NodesFile) -> String {
                     sources: node.sources.keys().map(Source::name).collect(),
                 };
                 (node.node_id, node_schema)
+            })
+            .collect(),
+        devices: nodes
+            .devices
+            .iter()
+            .map(|(key, device)| {
+                let sources = device
+                    .sources
+                    .iter()
+                    .map(|entry| {
+                        // `validate::run` has already checked every entry.
+                        let (node, source) = nodes.resolve(entry).expect("valid entry");
+                        DeviceSource {
+                            node: node.node_id,
+                            source: source.name(),
+                        }
+                    })
+                    .collect();
+                let device_schema = Device {
+                    name: device.name.clone(),
+                    sources,
+                };
+                (key.clone(), device_schema)
             })
             .collect(),
         reserved_node_ids: nodes.reserved_node_ids.clone(),
@@ -147,10 +187,12 @@ mod tests {
             reserved_node_ids = [0x7C, 0x00]
             nodes.b = { board = "c6-dev", node_id = 101, power = "always-on", heartbeat = 300, min_interval = 10, sources.battery = {}, sources.eder = {} }
             nodes.a = { board = "c6-dev", node_id = 100, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = { thresholds = { voltage = 2 } } }
+            devices.heating = { name = "Heating", sources = ["b.eder", "a.battery"] }
             "#,
         )
         .unwrap();
         // Nodes sorted by ID; eder has no kind yet, but a node can still run it.
+        // Device sources keep their order from nodes.toml.
         let expected = r#"{
   "kinds": {
     "4": {
@@ -181,6 +223,21 @@ mod tests {
       "sources": [
         "battery",
         "eder"
+      ]
+    }
+  },
+  "devices": {
+    "heating": {
+      "name": "Heating",
+      "sources": [
+        {
+          "node": 101,
+          "source": "eder"
+        },
+        {
+          "node": 100,
+          "source": "battery"
+        }
       ]
     }
   },

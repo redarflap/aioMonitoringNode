@@ -110,6 +110,51 @@ pub struct NodesFile {
     pub reserved_node_ids: Vec<u8>,
     /// Node name -> node, sorted by name.
     pub nodes: BTreeMap<String, Node>,
+    /// Device key -> HA device, sorted by key. None by default: then each
+    /// node is one HA device with all its sources.
+    #[serde(default)]
+    pub devices: BTreeMap<String, Device>,
+}
+
+impl NodesFile {
+    /// Looks up one `<node>.<source>` entry of a device, for example
+    /// `dev-c6.battery`. Fails if the node doesn't exist or doesn't run that
+    /// source.
+    pub fn resolve(&self, entry: &str) -> Result<(&Node, Source), String> {
+        let Some((node_name, source_name)) = entry.rsplit_once('.') else {
+            return Err(format!(
+                "`{entry}` isn't `<node>.<source>`, for example `dev-c6.battery`"
+            ));
+        };
+        let Some(node) = self.nodes.get(node_name) else {
+            let names: Vec<&str> = self.nodes.keys().map(String::as_str).collect();
+            return Err(format!(
+                "`{entry}`: there's no node `{node_name}`; the nodes are: {}",
+                names.join(", ")
+            ));
+        };
+        let Some(&source) = node.sources.keys().find(|s| s.name() == source_name) else {
+            let names: Vec<&str> = node.sources.keys().map(Source::name).collect();
+            return Err(format!(
+                "`{entry}`: node `{node_name}` doesn't run `{source_name}`; its sources are: {}",
+                names.join(", ")
+            ));
+        };
+        Ok((node, source))
+    }
+}
+
+/// One `[devices.<key>]` entry: an HA device that takes sources out of their
+/// nodes' default devices, even across nodes.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Device {
+    /// The device's name in HA.
+    pub name: String,
+    /// `<node>.<source>` entries, for example `dev-c6.battery`. An empty list
+    /// still parses, so that `validate.rs` can say why it's wrong.
+    #[serde(default)]
+    pub sources: Vec<String>,
 }
 
 /// One `[nodes.<name>]` entry.
@@ -272,6 +317,28 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("invalid value"), "{error}");
+    }
+
+    #[test]
+    fn devices_are_optional() {
+        let nodes: NodesFile = toml::from_str("reserved_node_ids = []\nnodes = {}").unwrap();
+        assert!(nodes.devices.is_empty());
+    }
+
+    #[test]
+    fn device() {
+        let nodes: NodesFile = toml::from_str(
+            r#"
+            reserved_node_ids = []
+            nodes = {}
+            [devices.heating]
+            name = "Heating"
+            sources = ["dev-c6.battery"]
+            "#,
+        )
+        .unwrap();
+        assert_eq!(nodes.devices["heating"].name, "Heating");
+        assert_eq!(nodes.devices["heating"].sources, ["dev-c6.battery"]);
     }
 
     #[test]

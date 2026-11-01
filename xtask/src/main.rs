@@ -120,6 +120,15 @@ fn check() -> Result<(), String> {
         let sources: Vec<_> = node.sources.keys().collect();
         println!("    sources: {sources:?}");
     }
+    if nodes.devices.is_empty() {
+        println!("  devices: none, so each node is one HA device");
+    }
+    for (key, device) in &nodes.devices {
+        println!(
+            "  device {key}: {:?}, sources {:?}",
+            device.name, device.sources
+        );
+    }
 
     validate::run(&boards, &nodes)
 }

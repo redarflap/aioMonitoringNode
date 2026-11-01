@@ -6,7 +6,14 @@
 # Threshold overrides go there too, in wire units, for example
 # `sources.battery = { thresholds = { voltage = 2 } }` (more than 2 steps of 20 mV).
 # Fields left out keep their default from crates/proto; a default can be "none" (never sends).
-# HA devices arrive in a later step.
+#
+# HA devices: each node is one device with all its sources. `[devices.<key>]` moves sources
+# into a device of its own, even from several nodes, for example
+#   [devices.heating]
+#   name = "Heating"
+#   sources = ["dev-c6.battery"]   # "<node>.<source>"
+# The key starts with a-z and holds only a-z, 0-9, `_` and `-`. A source can be in one
+# device only. Run `cargo xtask schemas` after any change here.
 
 # First bytes that legacy nodes still send: feather-s3 0x00, pyromat 0x01, t3s3 0x02,
 # eder gateway 0x7C (first byte of its MAC). Remove each once its node is reflashed.

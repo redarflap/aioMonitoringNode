@@ -20,6 +20,10 @@ pub fn run(boards: &BTreeMap<String, Board>, nodes: &NodesFile) -> Result<(), St
     errors.extend(sources_have_pins(boards, nodes));
     errors.extend(thresholds_are_fields(nodes));
     errors.extend(intervals_in_order(nodes));
+    errors.extend(device_keys_valid(nodes));
+    errors.extend(devices_have_sources(nodes));
+    errors.extend(device_sources_exist(nodes));
+    errors.extend(sources_in_one_device(nodes));
     for (name, board) in boards {
         errors.extend(pins_exist(name, board));
         errors.extend(no_pin_twice(name, board));
@@ -173,6 +177,71 @@ fn intervals_in_order(nodes: &NodesFile) -> Vec<String> {
                 "node `{name}`: min_interval = {} s is longer than heartbeat = {} s",
                 node.min_interval, node.heartbeat
             ));
+        }
+    }
+    errors
+}
+
+/// A device key matches `[a-z][a-z0-9_-]*`. It becomes `aio_<key>` in HA
+/// topics; starting with a letter, it can't clash with a node's `aio_<node_id>`.
+fn device_keys_valid(nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    for key in nodes.devices.keys() {
+        let mut chars = key.chars();
+        let first_ok = chars.next().is_some_and(|c| c.is_ascii_lowercase());
+        let rest_ok = chars.all(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '-'));
+        if !(first_ok && rest_ok) {
+            errors.push(format!(
+                "device `{key}`: a key must start with a-z and hold only a-z, 0-9, `_` and `-`"
+            ));
+        }
+    }
+    errors
+}
+
+/// Every device has at least one source; HA has nothing to show otherwise.
+fn devices_have_sources(nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (key, device) in &nodes.devices {
+        if device.sources.is_empty() {
+            errors.push(format!(
+                "device `{key}`: no sources; add one like `sources = [\"dev-c6.battery\"]`"
+            ));
+        }
+    }
+    errors
+}
+
+/// Every `<node>.<source>` entry names an existing node that runs that source.
+fn device_sources_exist(nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (key, device) in &nodes.devices {
+        for entry in &device.sources {
+            if let Err(e) = nodes.resolve(entry) {
+                errors.push(format!("device `{key}`: {e}"));
+            }
+        }
+    }
+    errors
+}
+
+/// No source is in two devices, or twice in one: each HA sensor belongs to
+/// exactly one device.
+fn sources_in_one_device(nodes: &NodesFile) -> Vec<String> {
+    let mut errors = Vec::new();
+    // entry -> key of the device that lists it
+    let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
+    for (key, device) in &nodes.devices {
+        for entry in &device.sources {
+            match seen.insert(entry, key) {
+                Some(other) if other == key => {
+                    errors.push(format!("device `{key}`: lists `{entry}` twice"));
+                }
+                Some(other) => {
+                    errors.push(format!("`{entry}` is in devices `{other}` and `{key}`"));
+                }
+                None => {}
+            }
         }
     }
     errors
@@ -502,6 +571,101 @@ mod tests {
                 "node `longer`: min_interval = 61 s is longer than heartbeat = 60 s",
                 "node `no-heartbeat`: min_interval = 1 s is longer than heartbeat = 0 s",
                 "node `zero`: min_interval = 0, but it must be at least 1 s",
+            ]
+        );
+    }
+
+    /// A `nodes.toml` with nodes `a` (battery) and `b` (battery, eder), and
+    /// the given `[devices.*]` lines.
+    fn with_devices(devices: &str) -> NodesFile {
+        nodes(&format!(
+            r#"
+            reserved_node_ids = []
+            nodes.a = {{ board = "c6-dev", node_id = 100, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = {{}} }}
+            nodes.b = {{ board = "c6-dev", node_id = 101, power = "always-on", heartbeat = 60, min_interval = 10, sources.battery = {{}}, sources.eder = {{}} }}
+            {devices}
+            "#
+        ))
+    }
+
+    #[test]
+    fn device_key_starts_with_a_letter() {
+        let nodes = with_devices(
+            r#"
+            devices.heating_2-b = { name = "Good", sources = ["a.battery"] }
+            devices.2nd = { name = "Digit first", sources = ["b.battery"] }
+            devices.Heating = { name = "Upper case", sources = ["b.eder"] }
+            devices."a.b" = { name = "Dot", sources = [] }
+            "#,
+        );
+        assert_eq!(
+            device_keys_valid(&nodes),
+            [
+                "device `2nd`: a key must start with a-z and hold only a-z, 0-9, `_` and `-`",
+                "device `Heating`: a key must start with a-z and hold only a-z, 0-9, `_` and `-`",
+                "device `a.b`: a key must start with a-z and hold only a-z, 0-9, `_` and `-`",
+            ]
+        );
+    }
+
+    #[test]
+    fn device_needs_a_source() {
+        let nodes = with_devices(
+            r#"
+            devices.good = { name = "Good", sources = ["a.battery"] }
+            devices.empty = { name = "Empty", sources = [] }
+            devices.missing = { name = "Missing" }
+            "#,
+        );
+        assert_eq!(
+            devices_have_sources(&nodes),
+            [
+                "device `empty`: no sources; add one like `sources = [\"dev-c6.battery\"]`",
+                "device `missing`: no sources; add one like `sources = [\"dev-c6.battery\"]`",
+            ]
+        );
+    }
+
+    #[test]
+    fn device_sources_must_exist() {
+        let nodes = with_devices(
+            r#"
+            devices.good = { name = "Good", sources = ["a.battery", "b.eder"] }
+            devices.bad = { name = "Bad", sources = ["a.eder", "c.battery", "a", "a.foo"] }
+            "#,
+        );
+        assert_eq!(
+            device_sources_exist(&nodes),
+            [
+                "device `bad`: `a.eder`: node `a` doesn't run `eder`; its sources are: battery",
+                "device `bad`: `c.battery`: there's no node `c`; the nodes are: a, b",
+                "device `bad`: `a` isn't `<node>.<source>`, for example `dev-c6.battery`",
+                "device `bad`: `a.foo`: node `a` doesn't run `foo`; its sources are: battery",
+            ]
+        );
+    }
+
+    #[test]
+    fn source_in_one_device_only() {
+        let good = with_devices(
+            r#"
+            devices.one = { name = "One", sources = ["a.battery", "b.battery"] }
+            devices.two = { name = "Two", sources = ["b.eder"] }
+            "#,
+        );
+        assert!(sources_in_one_device(&good).is_empty());
+
+        let bad = with_devices(
+            r#"
+            devices.one = { name = "One", sources = ["a.battery", "b.eder", "a.battery"] }
+            devices.two = { name = "Two", sources = ["b.eder"] }
+            "#,
+        );
+        assert_eq!(
+            sources_in_one_device(&bad),
+            [
+                "device `one`: lists `a.battery` twice",
+                "`b.eder` is in devices `one` and `two`",
             ]
         );
     }
