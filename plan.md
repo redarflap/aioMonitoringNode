@@ -81,9 +81,9 @@ Decided:
   - Kinds that differ from the node's sources: warn, still publish.
   - Publish `{"battery": {"voltage": 3.7}, "rssi": -71, "snr": 9.5}` to `aio/<node_id>/state`, not retained. Value = raw / divisor; the missing value becomes `null`.
 - `decoder/decode.test.js` runs the file the way Node-RED does (`new Function("msg", "node", "flow", code)`) with fake `node` and `flow`. Tests: the message above gives 1.28 V, RSSI −94 and SNR 11.25 with the real `schemas.json`; `64 04 b9` gives 3.7 V; `64 04 ff` gives `null`; every type, negative values and missing values with a test schema; unknown kind; too short and too long; a kind twice; reserved ID → output 1; no schemas yet; a source missing from the packet.
-- CI host job: `node --test decoder/`.
+- CI host job: `node --test decoder/decode.test.js`.
 
-**Check:** `node --test decoder/`. **Commit:** "Decode packets in Node-RED"
+**Check:** `node --test decoder/decode.test.js`. **Commit:** "Decode packets in Node-RED"
 
 ### 3.6 Decoder: HA discovery
 
@@ -95,7 +95,7 @@ Decided:
 - Tests: dev-c6's discovery from the real `schemas.json`; a declared device takes the source away from the default device, while RSSI and SNR stay; `online` republishes; an unknown node.
 - `ARCHITECTURE.md` "Decoding & Home Assistant": RSSI and SNR, their `unique_id`s, and how to move a source or remove a node by hand.
 
-**Check:** `node --test decoder/`. **Commit:** "Publish HA discovery"
+**Check:** `node --test decoder/decode.test.js`. **Commit:** "Publish HA discovery"
 
 ### 3.7 Set up Node-RED
 

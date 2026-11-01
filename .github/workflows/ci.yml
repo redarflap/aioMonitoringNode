@@ -28,6 +28,8 @@ jobs:
       # crates/proto was committed without running `cargo xtask schemas`.
       - run: cargo xtask schemas
       - run: git diff --exit-code schemas.json
+      # The Node-RED decoder, with Node's built-in test runner.
+      - run: node --test decoder/decode.test.js
 
   # The firmware of every node in nodes.toml.
   firmware:

@@ -102,6 +102,7 @@ cargo xtask clippy  <node>
 # receiver side
 cargo xtask schemas                            # regenerate schemas.json
 cargo xtask schemas --publish                  # and publish it to MQTT
+node --test decoder/decode.test.js             # decoder tests (no npm packages)
 ```
 
 - The broker comes from `AIO_MQTT_URL` = `mqtt://[user:password@]host[:port]` (port 1883 by default, no TLS, no `%` escapes; never commit it). `schemas --publish` publishes retained with QoS 1 to `aio/schemas` and waits up to 5 s for the broker's ack; a missing URL or broker is an error. `run` does the same after building, but there it only warns and still flashes.
@@ -109,7 +110,7 @@ cargo xtask schemas --publish                  # and publish it to MQTT
 - Plain `cargo` runs on the host and covers only `crates/*` and `xtask`. Never use `--workspace`.
 - Build firmware only through the xtask. It sets target, toolchain, features and `AIO_*` vars, and always builds `--release` (unoptimised code breaks 1-Wire timing and the LP size budget).
 - `.vscode/settings.json` mirrors `cargo xtask build dev-c6` for rust-analyzer. Add new `AIO_*` vars and features there too. Comment out `cargo.target` while working on the xtask.
-- CI runs fmt, clippy (`-D warnings`), the host tests, a RISC-V build of the libraries, `xtask check` and `xtask build --all`. It also regenerates `schemas.json` and fails if that changes it, so commit it after changing `nodes.toml` or `crates/proto`.
+- CI runs fmt, clippy (`-D warnings`), the host tests, the decoder tests, a RISC-V build of the libraries, `xtask check` and `xtask build --all`. It also regenerates `schemas.json` and fails if that changes it, so commit it after changing `nodes.toml` or `crates/proto`.
 - Logging: `defmt` via `esp-println`; panics via `esp-backtrace`.
 
 ## LoRa protocol
@@ -175,6 +176,6 @@ Flow: OpenMQTTGateway → MQTT → Node-RED → HA.
 
   Only ported sources have a kind. Fields without a unit or class leave that key out; thresholds stay out.
 - **Publishing:** `cargo xtask schemas --publish`, and `cargo xtask run` before flashing, publish `schemas.json` retained on `aio/schemas` (see "Build & commands"), so the decoder always has the current one, also after a restart.
-- **Decoder:** `decoder/` interprets `schemas.json` generically, with no per-kind code. Unknown kind or wrong total length: drop the packet and warn. Kinds that differ from the node's source list: warn, still publish. Each packet becomes one state JSON per node, with sentinels as `null`.
+- **Decoder:** `decoder/decode.js`, the body of one Node-RED function node, interprets `schemas.json` generically, with no per-kind code. It keeps the latest `schemas.json` from `aio/schemas` in flow context. A packet arrives from OpenMQTTGateway as `{"rssi": -94, "snr": 11.25, "hex": "640440", ...}`. Unknown kind, a kind twice or a wrong total length: drop the packet and warn. Kinds that differ from the node's source list: warn, still publish. Each packet becomes one state JSON on `aio/<node_id>/state`, not retained (so an old value can't come back as new), for example `{"battery": {"voltage": 3.7}, "rssi": -71, "snr": 9.5}`. Missing values are `null`, and so are all fields of a source the packet should have but lacks, so HA shows them as unknown instead of keeping an old value.
 - **Discovery** (HA ≥ 2024.11), retained, one message per device: `homeassistant/device/aio_<node_id>/config` for a node's default device (its sources not listed in any `[devices.*]`), `homeassistant/device/aio_<key>/config` for declared devices. Each field is a component with its node's state topic and `expire_after` ≈ 2.5 × heartbeat. `unique_id` = `aio_<node_id>_<source>_<field>` or `aio_<node_id>_ds18b20_<sensor_id>`, never the device key, so moving a source keeps its history. Republished on HA `online` and when a new repeated-group key appears. Unknown node IDs with known kinds still get a default device.
 - **Migration:** Node-RED routes packets whose first byte is in `reserved_node_ids` to the legacy flow, all others to this decoder.
