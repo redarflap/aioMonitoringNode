@@ -14,6 +14,8 @@
 #   sources = ["dev-c6.battery"]   # "<node>.<source>"
 # The key starts with a-z and holds only a-z, 0-9, `_` and `-`. A source can be in one
 # device only. Run `cargo xtask schemas` after any change here.
+# Moving a source to another device, or removing a node: delete the old device in HA,
+# then `cargo xtask schemas --publish`.
 
 # First bytes that legacy nodes still send: feather-s3 0x00, pyromat 0x01, t3s3 0x02,
 # eder gateway 0x7C (first byte of its MAC). Remove each once its node is reflashed.

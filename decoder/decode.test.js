@@ -213,6 +213,169 @@ test("a message without a packet is dropped", () => {
     assert.equal(warnings.length, 2);
 });
 
+// The discovery message for `id` (`aio_<node_id>` or `aio_<key>`) among the
+// messages on output 2.
+function discoveryOf(output, id) {
+    assert.ok(output, "no output");
+    assert.equal(output[0], null);
+    const found = output[1].filter((msg) => msg.topic === `homeassistant/device/${id}/config`);
+    assert.equal(found.length, 1, `discovery of ${id}`);
+    return found[0];
+}
+
+// The topics of the messages on output 2.
+function topics(output) {
+    return output[1].map((msg) => msg.topic);
+}
+
+test("dev-c6's discovery, from the real schemas.json", () => {
+    const output = decoder().send({ topic: "aio/schemas", payload: SCHEMAS });
+    assert.deepEqual(discoveryOf(output, "aio_100"), {
+        topic: "homeassistant/device/aio_100/config",
+        payload: {
+            device: { identifiers: ["aio_100"], name: "dev-c6" },
+            origin: { name: "aio decoder" },
+            components: {
+                aio_100_battery_voltage: {
+                    platform: "sensor",
+                    unique_id: "aio_100_battery_voltage",
+                    name: "battery voltage",
+                    state_topic: "aio/100/state",
+                    value_template: "{{ value_json.battery.voltage }}",
+                    unit_of_measurement: "V",
+                    device_class: "voltage",
+                    state_class: "measurement",
+                    expire_after: 150,
+                },
+                aio_100_rssi: {
+                    platform: "sensor",
+                    unique_id: "aio_100_rssi",
+                    name: "RSSI",
+                    state_topic: "aio/100/state",
+                    value_template: "{{ value_json.rssi }}",
+                    unit_of_measurement: "dBm",
+                    device_class: "signal_strength",
+                    state_class: "measurement",
+                    entity_category: "diagnostic",
+                    expire_after: 150,
+                },
+                aio_100_snr: {
+                    platform: "sensor",
+                    unique_id: "aio_100_snr",
+                    name: "SNR",
+                    state_topic: "aio/100/state",
+                    value_template: "{{ value_json.snr }}",
+                    unit_of_measurement: "dB",
+                    state_class: "measurement",
+                    entity_category: "diagnostic",
+                    expire_after: 150,
+                },
+            },
+        },
+        retain: true,
+    });
+    // One message per node, nothing else.
+    assert.deepEqual(topics(output), [
+        "homeassistant/device/aio_100/config",
+        "homeassistant/device/aio_101/config",
+    ]);
+});
+
+test("a declared device takes the source; RSSI and SNR stay", () => {
+    const schemas = {
+        ...TEST_SCHEMAS,
+        devices: {
+            heating: {
+                name: "Heating",
+                sources: [{ node: 100, source: "battery" }, { node: 101, source: "battery" }],
+            },
+        },
+    };
+    const output = decoder().send({ topic: "aio/schemas", payload: schemas });
+    assert.deepEqual(topics(output), [
+        "homeassistant/device/aio_100/config",
+        "homeassistant/device/aio_101/config",
+        "homeassistant/device/aio_heating/config",
+    ]);
+
+    const both = discoveryOf(output, "aio_100").payload.components;
+    assert.deepEqual(Object.keys(both), [
+        "aio_100_test_a", "aio_100_test_b", "aio_100_test_c",
+        "aio_100_test_d", "aio_100_test_e", "aio_100_test_f",
+        "aio_100_rssi", "aio_100_snr",
+    ]);
+    const batteryOnly = discoveryOf(output, "aio_101").payload.components;
+    assert.deepEqual(Object.keys(batteryOnly), ["aio_101_rssi", "aio_101_snr"]);
+
+    const heating = discoveryOf(output, "aio_heating").payload;
+    assert.deepEqual(heating.device, { identifiers: ["aio_heating"], name: "Heating" });
+    // The unique_id stays the node's, so the sensor keeps its history.
+    assert.deepEqual(Object.keys(heating.components), ["aio_100_battery_voltage", "aio_101_battery_voltage"]);
+    // Each from its own node's state topic and heartbeat (60 s and 300 s).
+    const fromBoth = heating.components.aio_100_battery_voltage;
+    const fromBatteryOnly = heating.components.aio_101_battery_voltage;
+    assert.equal(fromBoth.state_topic, "aio/100/state");
+    assert.equal(fromBoth.expire_after, 150);
+    assert.equal(fromBatteryOnly.state_topic, "aio/101/state");
+    assert.equal(fromBatteryOnly.expire_after, 750);
+});
+
+test("fields without a unit or class leave those out", () => {
+    const output = decoder().send({ topic: "aio/schemas", payload: TEST_SCHEMAS });
+    assert.deepEqual(discoveryOf(output, "aio_100").payload.components.aio_100_test_a, {
+        platform: "sensor",
+        unique_id: "aio_100_test_a",
+        name: "test a",
+        state_topic: "aio/100/state",
+        value_template: "{{ value_json.test.a }}",
+        expire_after: 150,
+    });
+});
+
+test("HA online republishes discovery", () => {
+    const { send } = decoder(SCHEMAS);
+    const output = send({ topic: "homeassistant/status", payload: "online" });
+    assert.deepEqual(output, send({ topic: "aio/schemas", payload: SCHEMAS }));
+    assert.equal(send({ topic: "homeassistant/status", payload: "offline" }), null);
+    // Before schemas.json there's nothing to publish.
+    assert.equal(decoder().send({ topic: "homeassistant/status", payload: "online" }), null);
+});
+
+test("an unknown node gets a default device on its first packet", () => {
+    const { send, warnings } = decoder(SCHEMAS);
+    const first = send(packet("6904b9"));
+    // Discovery first, so HA knows the sensors when the state arrives.
+    assert.deepEqual(topics(first), ["homeassistant/device/aio_105/config", "aio/105/state"]);
+    const device = discoveryOf(first, "aio_105").payload;
+    assert.deepEqual(device.device, { identifiers: ["aio_105"], name: "aio 105" });
+    assert.deepEqual(Object.keys(device.components), ["aio_105_battery_voltage", "aio_105_rssi", "aio_105_snr"]);
+    // Without a heartbeat, nothing expires.
+    for (const component of Object.values(device.components)) {
+        assert.equal(component.expire_after, undefined);
+    }
+    assert.deepEqual(warnings, []);
+
+    // Later packets only bring state.
+    assert.deepEqual(topics(send(packet("6904ba"))), ["aio/105/state"]);
+
+    // HA online and new schemas republish it.
+    const online = send({ topic: "homeassistant/status", payload: "online" });
+    assert.deepEqual(discoveryOf(online, "aio_105"), discoveryOf(first, "aio_105"));
+    const schemas = send({ topic: "aio/schemas", payload: SCHEMAS });
+    assert.deepEqual(discoveryOf(schemas, "aio_105"), discoveryOf(first, "aio_105"));
+});
+
+test("an unknown node that joins nodes.toml gets its real device", () => {
+    const { send } = decoder(SCHEMAS);
+    send(packet("6904b9"));
+    const joined = {
+        ...SCHEMAS,
+        nodes: { ...SCHEMAS.nodes, 105: { name: "new", heartbeat: 60, sources: ["battery"] } },
+    };
+    const output = send({ topic: "aio/schemas", payload: joined });
+    assert.equal(discoveryOf(output, "aio_105").payload.device.name, "new");
+});
+
 test("a broken schemas.json is ignored", () => {
     const { send, warnings } = decoder(SCHEMAS);
     assert.equal(send({ topic: "aio/schemas", payload: "" }), null);
