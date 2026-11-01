@@ -75,6 +75,8 @@ Built and committed without a board: the multimeter check is still open.
 
 **Check:** the gateway shows `64 04 xx` from dev-c6 every `heartbeat`, and `xx` × 20 mV matches the multimeter. **Commit:** "Send the battery packet"
 
+Built and committed without a board: the gateway check is still open.
+
 ### 1.8 Wrap up
 
 - Delete step 1 from this plan. Merge `step-1-battery` into `main` once CI passes.

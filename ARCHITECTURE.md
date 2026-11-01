@@ -1,6 +1,6 @@
 # Architecture
 
-Built so far: the scaffold (workspace, xtask, firmware on C6 and S3, LoRa radio, report task, one stub per source, CI). The report task sends the test bytes `[node_id, 0xAA, 0x55]` every `heartbeat`. Everything else here is the target design, built in the order of `plan.md`. Update this file wherever the real code ends up different.
+Built so far: the scaffold (workspace, xtask, firmware on C6 and S3, LoRa radio, report task, CI), the packet builder in `crates/proto`, and the `battery` source (kind 4). The other sources are stubs. The battery task samples every `heartbeat` and signals the report task, which then sends a packet with every source's latest snapshot. There's no send policy yet. Everything else here is the target design, built in the order of `plan.md`. Update this file wherever the real code ends up different.
 
 ## Concepts
 

@@ -1,12 +1,12 @@
 //! The report task: the only code that sends over LoRa.
 //!
-//! For now it sends test bytes. Later it collects the sources' snapshots,
-//! applies the send policy and sends the real packet.
+//! It sends a packet with every source's latest snapshot each time a source
+//! has new data. The send policy (step 2 of plan.md) comes later.
 
 use defmt::{error, info};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
-use embassy_time::{Duration, Timer};
+use proto::{Packet, Section};
 
 use crate::{config, radio};
 
@@ -14,8 +14,9 @@ use crate::{config, radio};
 /// task.
 pub static NEW_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
-/// Starts the radio, then sends a packet every `HEARTBEAT_S` seconds.
-/// Ends if the radio doesn't start, because then there is nothing to do.
+/// Starts the radio, then sends a packet each time a source signals
+/// `NEW_DATA`. Ends if the radio doesn't start, because then there is nothing
+/// to do.
 #[embassy_executor::task]
 #[allow(
     clippy::large_stack_frames,
@@ -34,13 +35,43 @@ pub async fn task(hardware: radio::Hardware) {
         }
     };
 
-    // Test bytes, until crates/proto defines the real packet.
-    let packet = [config::NODE_ID, 0xAA, 0x55];
     loop {
-        match radio.send(&packet).await {
-            Ok(()) => info!("sent {=[u8]:02x}", packet),
+        // A signal from before the radio was ready isn't lost: `wait` returns
+        // right away then.
+        NEW_DATA.wait().await;
+        let packet = build_packet();
+        let bytes = packet.as_bytes();
+        match radio.send(bytes).await {
+            Ok(()) => info!("sent {=[u8]:02x}", bytes),
             Err(e) => error!("send failed: {}", e),
         }
-        Timer::after(Duration::from_secs(config::HEARTBEAT_S.into())).await;
+    }
+}
+
+/// The node ID, then one section per source the node runs, each with the
+/// source's latest snapshot.
+#[allow(
+    unused_mut,
+    reason = "a node whose sources have no section yet pushes nothing"
+)]
+fn build_packet() -> Packet {
+    let mut packet = Packet::new(config::NODE_ID);
+    #[cfg(feature = "source-battery")]
+    push(
+        &mut packet,
+        crate::sources::battery::LATEST.lock(core::cell::Cell::get),
+    );
+    packet
+}
+
+/// Appends `section` to `packet`. A section that doesn't fit is left out and
+/// logged.
+#[allow(
+    dead_code,
+    reason = "a node whose sources have no section yet pushes nothing"
+)]
+fn push<S: Section>(packet: &mut Packet, section: S) {
+    if packet.push(&section).is_err() {
+        error!("kind {} doesn't fit into the packet", S::KIND);
     }
 }
