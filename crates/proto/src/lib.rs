@@ -16,13 +16,47 @@ pub const MAX_PACKET_LEN: usize = 255;
 /// The bytes of a packet while it's being built.
 pub type Bytes = Vec<u8, MAX_PACKET_LEN>;
 
-/// One value of a section. Step 3 adds its type, scale and unit, so that
-/// this becomes the schema the decoder reads.
+/// How a field's value is stored on the wire: an integer, little-endian.
+/// The missing value follows from the type: `MIN` for signed types, `MAX`
+/// for unsigned ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Type {
+    U8,
+    I8,
+    U16,
+    I16,
+    U32,
+    I32,
+}
+
+impl Type {
+    /// How many bytes the value takes on the wire.
+    pub const fn size(self) -> usize {
+        match self {
+            Type::U8 | Type::I8 => 1,
+            Type::U16 | Type::I16 => 2,
+            Type::U32 | Type::I32 => 4,
+        }
+    }
+}
+
+/// One value of a section, as the decoder and Home Assistant need it.
+/// `cargo xtask schemas` exports these to `schemas.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Field {
     /// The field's name, for example `voltage`. `nodes.toml` uses it for
-    /// threshold overrides.
+    /// threshold overrides, the decoder as the key in the state JSON.
     pub key: &'static str,
+    pub ty: Type,
+    /// The decoder shows raw / `divisor`. An integer, so that no floats are
+    /// needed here, and JS prints exact values (185 / 50 = 3.7).
+    pub divisor: u32,
+    /// HA's unit, for example `V`.
+    pub unit: Option<&'static str>,
+    /// HA's device class, for example `voltage`.
+    pub device_class: Option<&'static str>,
+    /// HA's state class, for example `measurement`.
+    pub state_class: Option<&'static str>,
     /// The default threshold in wire units: a change by more than this is
     /// worth a packet. `None`: the field never triggers a packet and only
     /// rides along.
@@ -103,6 +137,16 @@ mod tests {
         fn changed(&self, _last: &Self, _thresholds: &[Option<u32>]) -> bool {
             false
         }
+    }
+
+    #[test]
+    fn type_sizes() {
+        assert_eq!(Type::U8.size(), size_of::<u8>());
+        assert_eq!(Type::I8.size(), size_of::<i8>());
+        assert_eq!(Type::U16.size(), size_of::<u16>());
+        assert_eq!(Type::I16.size(), size_of::<i16>());
+        assert_eq!(Type::U32.size(), size_of::<u32>());
+        assert_eq!(Type::I32.size(), size_of::<i32>());
     }
 
     #[test]

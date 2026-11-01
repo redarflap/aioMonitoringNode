@@ -2,7 +2,7 @@
 
 use heapless::CapacityError;
 
-use crate::{Bytes, Field, Section};
+use crate::{Bytes, Field, Section, Type};
 
 /// The battery voltage as one wire byte: mV / 20, rounded (0–5.08 V).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,9 +29,15 @@ impl Battery {
 impl Section for Battery {
     const KIND: u8 = 4;
 
-    /// No threshold: a battery drains slowly, so its voltage only rides along.
+    /// Wire steps of 20 mV are 1/50 V. No threshold: a battery drains slowly,
+    /// so its voltage only rides along.
     const FIELDS: &'static [Field] = &[Field {
         key: "voltage",
+        ty: Type::U8,
+        divisor: 50,
+        unit: Some("V"),
+        device_class: Some("voltage"),
+        state_class: Some("measurement"),
         threshold: None,
     }];
 
@@ -72,13 +78,28 @@ mod tests {
 
     #[test]
     fn voltage_has_no_default_threshold() {
-        assert_eq!(
-            Battery::FIELDS,
-            [Field {
-                key: "voltage",
-                threshold: None
-            }]
-        );
+        assert_eq!(Battery::FIELDS.len(), 1);
+        assert_eq!(Battery::FIELDS[0].key, "voltage");
+        assert_eq!(Battery::FIELDS[0].threshold, None);
+    }
+
+    #[test]
+    fn body_matches_fields() {
+        // So the schema and the encoder can't drift apart.
+        let size: usize = Battery::FIELDS.iter().map(|field| field.ty.size()).sum();
+        assert_eq!(body(Battery::from_millivolts(3700)).len(), size);
+        assert_eq!(body(Battery::NOT_MEASURED).len(), size);
+    }
+
+    #[test]
+    fn voltage_in_volts() {
+        // 0xB9 = 185 steps of 20 mV = 3.7 V.
+        let field = Battery::FIELDS[0];
+        assert_eq!(field.ty, Type::U8);
+        assert_eq!(field.divisor, 50);
+        assert_eq!(field.unit, Some("V"));
+        // NOT_MEASURED is 0xFF, the missing value of a U8.
+        assert_eq!(body(Battery::NOT_MEASURED), [u8::MAX]);
     }
 
     #[test]

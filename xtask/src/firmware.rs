@@ -353,25 +353,26 @@ sources.eder = {}",
         assert_eq!(env["AIO_THRESHOLDS_BATTERY"], "2");
     }
 
+    /// A `u8` field with the given key and default threshold.
+    fn field(key: &'static str, threshold: Option<u32>) -> Field {
+        Field {
+            key,
+            ty: proto::Type::U8,
+            divisor: 1,
+            unit: None,
+            device_class: None,
+            state_class: None,
+            threshold,
+        }
+    }
+
     #[test]
     fn thresholds_keep_field_order() {
         let fields = [
-            Field {
-                key: "a",
-                threshold: Some(5),
-            },
-            Field {
-                key: "b",
-                threshold: None,
-            },
-            Field {
-                key: "c",
-                threshold: Some(0),
-            },
-            Field {
-                key: "d",
-                threshold: Some(7),
-            },
+            field("a", Some(5)),
+            field("b", None),
+            field("c", Some(0)),
+            field("d", Some(7)),
         ];
         assert_eq!(thresholds(&fields, &BTreeMap::new()), "5,-,0,7");
 
