@@ -1,6 +1,6 @@
 # Architecture
 
-Built so far: the scaffold (workspace, xtask, firmware on C6 and S3, LoRa radio, report task, CI), the packet builder in `crates/proto`, the `battery` source (kind 4), and the send policy with threshold overrides from `nodes.toml`. The other sources are stubs. The battery task samples every `heartbeat` and signals the report task. That one takes a snapshot of every source's latest section and sends it when the policy says so (see "Send policy"). Everything else here is the target design, built in the order of `plan.md`. Update this file wherever the real code ends up different.
+Built so far: the scaffold (workspace, xtask, firmware on C6 and S3, LoRa radio, report task, CI), the packet builder in `crates/proto`, the `battery` source (kind 4), the send policy with threshold overrides from `nodes.toml`, and the receiver side: `schemas.json` (fixed fields only; the repeated group comes with `ds18b20`), HA devices in `nodes.toml`, publishing to `aio/schemas`, and the Node-RED decoder with HA discovery, running next to the legacy flow. The other sources are stubs. The battery task samples every `heartbeat` and signals the report task. That one takes a snapshot of every source's latest section and sends it when the policy says so (see "Send policy"). Everything else here is the target design, built in the order of `plan.md`. Update this file wherever the real code ends up different.
 
 ## Concepts
 
