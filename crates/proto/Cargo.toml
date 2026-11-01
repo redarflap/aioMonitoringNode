@@ -5,3 +5,5 @@ edition.workspace = true
 
 [dependencies]
 heapless = { workspace = true }
+# Each section decides with it whether its fields changed.
+policy = { path = "../policy" }

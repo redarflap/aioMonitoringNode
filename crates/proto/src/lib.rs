@@ -16,14 +16,35 @@ pub const MAX_PACKET_LEN: usize = 255;
 /// The bytes of a packet while it's being built.
 pub type Bytes = Vec<u8, MAX_PACKET_LEN>;
 
+/// One value of a section. Step 3 adds its type, scale and unit, so that
+/// this becomes the schema the decoder reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Field {
+    /// The field's name, for example `voltage`. `nodes.toml` uses it for
+    /// threshold overrides.
+    pub key: &'static str,
+    /// The default threshold in wire units: a change by more than this is
+    /// worth a packet. `None`: the field never triggers a packet and only
+    /// rides along.
+    pub threshold: Option<u32>,
+}
+
 /// The data of one source, as it goes on the wire.
 pub trait Section {
     /// Picks the section's schema. Each source has its own kind, and numbers
     /// are never reused.
     const KIND: u8;
 
+    /// The section's fields, in wire order.
+    const FIELDS: &'static [Field];
+
     /// Appends the section body to `out`. Fails if it doesn't fit.
     fn encode(&self, out: &mut Bytes) -> Result<(), CapacityError>;
+
+    /// Whether any field changed since `last` by more than its threshold
+    /// (see `policy::changed`). `thresholds` has one entry per field of
+    /// `FIELDS`, in the same order.
+    fn changed(&self, last: &Self, thresholds: &[Option<u32>]) -> bool;
 }
 
 /// A section doesn't fit into the packet's 255 bytes.
@@ -68,14 +89,19 @@ mod tests {
     use super::*;
 
     /// A test-only section of kind `KIND`. `Fill(len, value)` has a body of
-    /// `len` bytes, all set to `value`.
+    /// `len` bytes, all set to `value`. It has no fields, so it never changes.
     struct Fill<const KIND: u8>(usize, u8);
 
     impl<const KIND: u8> Section for Fill<KIND> {
         const KIND: u8 = KIND;
+        const FIELDS: &'static [Field] = &[];
 
         fn encode(&self, out: &mut Bytes) -> Result<(), CapacityError> {
             out.extend_from_slice(&vec![self.1; self.0])
+        }
+
+        fn changed(&self, _last: &Self, _thresholds: &[Option<u32>]) -> bool {
+            false
         }
     }
 

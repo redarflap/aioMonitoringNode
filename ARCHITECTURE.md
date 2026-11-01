@@ -132,7 +132,8 @@ Raw LoRa, one-way, no ACKs or retries.
 - Send when any field differs from its last sent value by more than its threshold, but not more often than `min_interval`. A change during `min_interval` is sent when it ends, if it still exceeds the threshold.
 - A `ds18b20` sensor appearing or disappearing counts as a change.
 - Otherwise send every `heartbeat`.
-- Thresholds are in wire units; 0 means "any change" (the default for flags and enums). Each numeric field has a default threshold in `crates/proto`, which `nodes.toml` can override.
+- Thresholds are in wire units; 0 means "any change" (the default for flags and enums). Each field has a default threshold in its section's `FIELDS` in `crates/proto`, which `nodes.toml` can override.
+- A default threshold can be "none": then the field never triggers a packet and only rides along, like the battery voltage. `nodes.toml` can still set a number.
 
 ### Kinds (1–3 proposed; confirm their field types before fixing them)
 
